@@ -24,13 +24,13 @@ public class User {
         // Constructeur vide requis par JPA
     }
 
-    public User(Long id, String email, String password, Integer companyId, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public User(Long id, String email, String password, Integer companyId) {
         this.id = id;
         this.email = email;
         this.password = password;
         this.companyId = companyId;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
     public Long getId() {
