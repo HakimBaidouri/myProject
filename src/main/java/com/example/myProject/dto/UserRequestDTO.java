@@ -10,7 +10,7 @@ public class UserRequestDTO {
     @Email(message = "Email should be valid")
     private String email;
 
-    @NotBlank(message = "Email cannot be blank")
+    @NotBlank(message = "Password cannot be blank")
     private String password;
 
     private Integer companyId;
