@@ -60,5 +60,18 @@ public class UserController {
 
         return new ResponseEntity<>(updatedUser, HttpStatus.OK);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<User> deleteUser(@PathVariable Long id){
+        User existingUser = userRepository.findById(id).orElse(null);
+
+        if (existingUser == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        userRepository.delete(existingUser);
+
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
 }
 
