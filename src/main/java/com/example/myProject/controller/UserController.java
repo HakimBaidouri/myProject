@@ -42,5 +42,23 @@ public class UserController {
         // Retourner une réponse HTTP avec l'utilisateur créé
         return new ResponseEntity<>(savedUser, HttpStatus.CREATED);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @Valid @RequestBody UserRequestDTO userRequestDTO) {
+        User existingUser = userRepository.findById(id).orElse(null);
+
+        if (existingUser == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        existingUser.setEmail(userRequestDTO.getEmail());
+        existingUser.setPassword(userRequestDTO.getPassword());
+        existingUser.setCompanyId(userRequestDTO.getCompanyId());
+        existingUser.setUpdatedAt(LocalDateTime.now());
+
+        User updatedUser = userRepository.save(existingUser);
+
+        return new ResponseEntity<>(updatedUser, HttpStatus.OK);
+    }
 }
 
