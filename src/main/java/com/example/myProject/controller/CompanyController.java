@@ -67,4 +67,17 @@ public class CompanyController {
 
         return new ResponseEntity<>(updatedCompany, HttpStatus.OK);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Company> deleteCompany(@PathVariable Long id){
+        Company existingCompany = companyRepository.findById(id).orElse(null);
+
+        if (existingCompany == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        companyRepository.delete(existingCompany);
+
+        return new ResponseEntity<>(existingCompany, HttpStatus.OK);
+    }
 }
