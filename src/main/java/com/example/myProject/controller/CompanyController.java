@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("myProject/api/companies")
@@ -25,6 +26,17 @@ public class CompanyController {
     @GetMapping
     public List<Company> getAllCompanies() {
         return companyRepository.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Company> getCompany(@PathVariable Long id) {
+        Optional<Company> existingCompany = companyRepository.findById(id);
+
+        if (existingCompany.isPresent()) {
+            return new ResponseEntity<>(existingCompany.get(), HttpStatus.OK);
+        }
+
+        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
 
     @PostMapping
