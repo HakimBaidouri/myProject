@@ -44,4 +44,27 @@ public class CompanyController {
 
         return new ResponseEntity<>(savedCompany, HttpStatus.CREATED);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Company> updateCompany(@PathVariable Long id, @Valid @RequestBody CompanyRequestDTO companyRequestDTO) {
+        Company existingCompany = companyRepository.findById(id).orElse(null);
+
+        if (existingCompany == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        existingCompany.setName(companyRequestDTO.getName());
+        existingCompany.setVat(companyRequestDTO.getVat());
+        existingCompany.setPhoneNumber(companyRequestDTO.getPhoneNumber());
+        existingCompany.setEmail(companyRequestDTO.getEmail());
+        existingCompany.setAddress(companyRequestDTO.getAddress());
+        existingCompany.setCity(companyRequestDTO.getCity());
+        existingCompany.setPostalCode(companyRequestDTO.getPostalCode());
+        existingCompany.setCountry(companyRequestDTO.getCountry());
+        existingCompany.setUpdatedAt(LocalDateTime.now());
+
+        Company updatedCompany = companyRepository.save(existingCompany);
+
+        return new ResponseEntity<>(updatedCompany, HttpStatus.OK);
+    }
 }
