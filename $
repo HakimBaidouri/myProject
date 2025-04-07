@@ -1,0 +1,21 @@
+Post request for users
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      Wed Apr 2 12:08:07 2025 +0200
+#
+# interactive rebase in progress; onto b97acb8
+# Last commands done (10 commands done):
+#    edit bc4007d Getters and setters updated
+#    edit fb7f742 Post request for users
+# Next commands to do (9 remaining commands):
+#    edit ed18168 message for email modified
+#    edit 600fee8 Post request for companies
+# You are currently editing a commit while rebasing branch 'main' on 'b97acb8'.
+#
+# Changes to be committed:
+#	modified:   pom.xml
+#	modified:   src/main/java/com/example/myProject/controller/UserController.java
+#	new file:   src/main/java/com/example/myProject/dto/UserRequestDTO.java
+#
