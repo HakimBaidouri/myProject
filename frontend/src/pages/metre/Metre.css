@@ -1,0 +1,26 @@
+.metre-container {
+    width: 70%;
+    margin: 0 auto;
+    padding: 2rem;
+    background-color: #f9f9f9;
+    overflow: hidden; /* 🔥 empêche scroll externe */
+  }
+
+.metre-table .ht_master table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+.htCore colgroup col.col-Ordre          { width: 5%; }
+.htCore colgroup col.col-Num            { width: 10%; }
+.htCore colgroup col.col-Intitule       { width: 25%; }
+.htCore colgroup col.col-Unite          { width: 5%; }
+.htCore colgroup col.col-Quantite       { width: 10%; }
+.htCore colgroup col.col-PU             { width: 10%; }
+.htCore colgroup col.col-SOM            { width: 10%; }
+.htCore colgroup col.col-Commentaires   { width: 15%; }
+
+::-webkit-scrollbar {
+    display: none;
+  }
+  

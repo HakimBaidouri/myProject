@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from '../App';
-import Metre from '../pages/Metre';
+import Metre from '../pages/metre/Metre';
 import Home from '../pages/Home';
 
 const router = createBrowserRouter([
