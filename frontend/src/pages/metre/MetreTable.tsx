@@ -9,7 +9,12 @@ import './Metre.css';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
-export default function Metre() {
+interface MetreTableProps {
+  data: any[][];
+  onChange?: (newData: any[][]) => void;
+}
+
+export default function Metre(_: MetreTableProps) {
 
   const hotRef = useRef<HotTableClass | null>(null);
 

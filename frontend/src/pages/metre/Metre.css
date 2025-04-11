@@ -21,6 +21,28 @@
 .htCore colgroup col.col-Commentaires   { width: 15%; }
 
 ::-webkit-scrollbar {
-    display: none;
-  }
-  
+  display: none;
+}
+
+.metre-layout {
+  display: flex;
+  height: 100vh;
+}
+
+.metre-tree {
+  width: 250px;
+  border-right: 1px solid #ccc;
+  padding: 1rem;
+  background: #f9f9f9;
+  overflow-y: auto;
+}
+
+.metre-table-container {
+  flex: 1;
+  padding: 2rem;
+  overflow-x: auto;
+}
+
+.handsontable {
+  font-size: 14px;
+}

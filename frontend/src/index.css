@@ -12,3 +12,18 @@ html, body, #root {
 body {
   display: block; /* important si jamais flex était appliqué par erreur */
 }
+
+.rc-tree-switcher-icon,
+.rc-tree-iconEle {
+  display: none !important;
+}
+
+.metre-tree {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.rc-tree-title {
+  padding: 4px 8px;
+}
+

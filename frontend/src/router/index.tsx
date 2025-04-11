@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from '../App';
-import Metre from '../pages/metre/Metre';
 import Home from '../pages/Home';
+import MetreArbo from '../pages/metre/MetreArbo';
 
 const router = createBrowserRouter([
   {
@@ -9,7 +9,7 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Home /> },
-      { path: 'metre', element: <Metre /> }
+      { path: 'metre', element: <MetreArbo/> }
     ]
   }
 ]);
