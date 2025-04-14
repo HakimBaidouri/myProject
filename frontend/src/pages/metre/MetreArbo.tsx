@@ -31,12 +31,6 @@ export default function MetreArbo() {
     }
   ];
 
-  const [tables] = useState<Record<string, any[][]>>({
-    '7.1': [['340', '22.5.1', 'Mur porteur', 'm²', 10, 150, 1500]],
-    '7.2': [['341', '22.5.2', 'Cloison', 'm²', 5, 100, 500]],
-    '8.1': [['342', '22.5.3', 'Charpente bois', 'm²', 8, 200, 1600]]
-  });
-
   const handleDoubleClick = (_: any, node: any) => {
     if (!node.children) {
       setSelectedKey(node.key); // uniquement si c’est une feuille
@@ -52,7 +46,7 @@ export default function MetreArbo() {
         {selectedKey && (
           <>
             <h2>Chapitre : {selectedKey}</h2>
-            <MetreTable data={tables[selectedKey]} />
+            <MetreTable />
           </>
         )}
       </main>

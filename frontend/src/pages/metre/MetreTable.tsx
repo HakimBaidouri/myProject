@@ -1,56 +1,152 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import Handsontable from 'handsontable';
-import 'handsontable/dist/handsontable.full.min.css';
-import { NumericCellType } from 'handsontable/cellTypes';
 import type { HotTableClass } from '@handsontable/react';
+import { NumericCellType } from 'handsontable/cellTypes';
+import 'handsontable/dist/handsontable.full.min.css';
 import './Metre.css';
+import MetreDetailTable from './MetreDetailTable';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
-interface MetreTableProps {
-  data: any[][]; // toujours utile si tu veux le rendre contrôlé plus tard
-  onChange?: (newData: any[][]) => void;
-}
-
-export default function Metre(_: MetreTableProps) {
+export default function MetreTable() {
   const hotRef = useRef<HotTableClass | null>(null);
 
-  const initialData = [
+  const [mainData, setMainData] = useState<any[][]>([
     ['340', '22.5.1', 'Toiture', 'm²', 0, 0, 0, ''],
     ['340', '22.5.2', 'Charpente', 'm²', 0, 0, 0, ''],
     ['Total', '', '', '', '', '', 0, '']
-  ];
+  ]);
+
+  const [details, setDetails] = useState<Record<string, any[][]>>({});
+  const [openDetails, setOpenDetails] = useState<string[]>([]);
+
+  const toggleDetail = (intitule: string) => {
+    setOpenDetails(prev =>
+      prev.includes(intitule)
+        ? prev.filter(i => i !== intitule)
+        : [...prev, intitule]
+    );
+  };
+
+  const handleAddRow = () => {
+    setMainData(prev => {
+      const copy = [...prev];
+      const total = copy.pop() || ['Total', '', '', '', '', '', 0, ''];
+      const newRow = ['', '', '', '', 0, 0, 0, ''];
+      return [...copy, newRow, total];
+    });
+  };
+
+  const handleDetailChange = (intitule: string, totalFromDetail: number) => {
+    const hot = hotRef.current?.hotInstance;
+    if (!hot) return;
+
+    const rowIndex = hot.getData().findIndex(row => row[2] === intitule);
+    if (rowIndex !== -1) {
+      hot.setDataAtCell(rowIndex, 4, totalFromDetail, 'fromDetail');
+    }
+  };
+
+  const updateTotalRow = () => {
+    setMainData(prev => {
+      const copy = [...prev];
+      const totalRowIndex = copy.length - 1;
+
+      let total = 0;
+      for (let i = 0; i < totalRowIndex; i++) {
+        total += parseFloat(copy[i][6]) || 0;
+      }
+
+      copy[totalRowIndex][6] = total;
+      return copy;
+    });
+  };
+
+  const afterChange = (
+    changes: Handsontable.CellChange[] | null,
+    source: Handsontable.ChangeSource
+  ) => {
+    if (!changes || source === 'loadData') return;
+
+    setMainData(prev => {
+      const newData = [...prev.map(row => [...row])];
+      const totalRowIndex = newData.length - 1;
+
+      changes.forEach(([row, col, , newValue]) => {
+        newData[row][col as number] = newValue;
+
+        if (col === 4 || col === 5) {
+          const qte = parseFloat(newData[row][4]) || 0;
+          const pu = parseFloat(newData[row][5]) || 0;
+          newData[row][6] = qte * pu;
+        }
+      });
+
+      // Update total général
+      let total = 0;
+      for (let i = 0; i < totalRowIndex; i++) {
+        total += parseFloat(newData[i][6]) || 0;
+      }
+      newData[totalRowIndex][6] = total;
+
+      return newData;
+    });
+  };
 
   const actionRenderer = (instance: any, td: HTMLElement, row: number) => {
     const totalRowIndex = instance.countRows() - 1;
     td.innerHTML = '';
-  
     if (row === totalRowIndex) return;
-  
-    const button = document.createElement('button');
-    button.innerText = '🗑️';
-    button.style.border = 'none';
-    button.style.background = 'transparent';
-    button.style.cursor = 'pointer';
-  
-    button.onclick = () => {
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerText = '🗑️';
+    deleteBtn.style.marginRight = '5px';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.background = 'transparent';
+    deleteBtn.style.cursor = 'pointer';
+
+    deleteBtn.onclick = () => {
+      const intitule = instance.getDataAtCell(row, 2); // col 2 = intitulé
+
+      // Supprime la ligne
       instance.alter('remove_row', row);
-      updateTotalRow(); // ✅ recalcul après suppression
+      updateTotalRow();
+
+      // Supprime aussi le détail associé
+      setDetails(prev => {
+        const copy = { ...prev };
+        delete copy[intitule];
+        return copy;
+      });
+
+      setOpenDetails(prev => prev.filter(i => i !== intitule));
     };
-  
-    td.appendChild(button);
-  };  
+
+    const detailBtn = document.createElement('button');
+    detailBtn.innerText = '🔍';
+    detailBtn.style.border = 'none';
+    detailBtn.style.background = 'transparent';
+    detailBtn.style.cursor = 'pointer';
+
+    detailBtn.onclick = () => {
+      const intitule = instance.getDataAtCell(row, 2);
+      toggleDetail(intitule);
+    };
+
+    td.appendChild(deleteBtn);
+    td.appendChild(detailBtn);
+  };
 
   const columns = [
-    { data: 0, type: 'text', className: 'col-Ordre' },
-    { data: 1, type: 'text', className: 'col-Num' },
-    { data: 2, type: 'text', className: 'col-Intitule' },
-    { data: 3, type: 'text', className: 'col-Unite' },
-    { data: 4, type: 'numeric', className: 'col-Quantite' },
-    { data: 5, type: 'numeric', className: 'col-PU' },
-    { data: 6, type: 'numeric', readOnly: true, className: 'col-SOM' },
-    { data: 7, type: 'text', className: 'col-Commentaires' },
+    { data: 0, type: 'text' },
+    { data: 1, type: 'text' },
+    { data: 2, type: 'text' },
+    { data: 3, type: 'text' },
+    { data: 4, type: 'numeric' },
+    { data: 5, type: 'numeric' },
+    { data: 6, type: 'numeric', readOnly: true },
+    { data: 7, type: 'text' },
     {
       data: 'actions',
       renderer: actionRenderer,
@@ -68,63 +164,8 @@ export default function Metre(_: MetreTableProps) {
     'PU',
     'SOM',
     'Commentaires',
-    '' // pour la colonne "Actions"
+    ''
   ];
-
-  const afterChange = (
-    changes: Handsontable.CellChange[] | null,
-    source: Handsontable.ChangeSource
-  ) => {
-    if (!changes || source === 'loadData') return;
-
-    const hot = hotRef.current?.hotInstance;
-    if (!hot) return;
-
-    changes.forEach(([row, col]) => {
-      if (col === 4 || col === 5) {
-        const quantity = parseFloat(hot.getDataAtCell(row, 4)) || 0;
-        const unitPrice = parseFloat(hot.getDataAtCell(row, 5)) || 0;
-        const product = quantity * unitPrice;
-        hot.setDataAtCell(row, 6, product, 'autoCalc');
-      }
-
-      if (col === 6 && row !== hot.countRows() - 1) {
-        updateTotalRow();
-      }
-    });
-  };
-
-  const handleAddRow = () => {
-    const hot = hotRef.current?.hotInstance;
-    if (hot) {
-      const rowIndex = hot.countRows() - 1;
-      hot.alter('insert_row_below', rowIndex, 1);
-      hot.setDataAtCell(rowIndex + 1, 0, 'Total');
-      hot.setDataAtCell(rowIndex, 0, '');
-      hot.setDataAtCell(rowIndex, 1, '');
-      hot.setDataAtCell(rowIndex, 2, '');
-      hot.setDataAtCell(rowIndex, 3, '');
-      hot.setDataAtCell(rowIndex, 4, 0);
-      hot.setDataAtCell(rowIndex, 5, 0);
-      hot.setDataAtCell(rowIndex, 6, 0);
-      hot.setDataAtCell(rowIndex, 7, '');
-    }
-  };
-
-  const updateTotalRow = () => {
-    const hot = hotRef.current?.hotInstance;
-    if (!hot) return;
-
-    let total = 0;
-    const totalRowIndex = hot.countRows() - 1;
-
-    for (let row = 0; row < totalRowIndex; row++) {
-      const value = parseFloat(hot.getDataAtCell(row, 6)) || 0;
-      total += value;
-    }
-
-    hot.setDataAtCell(totalRowIndex, 6, total);
-  };
 
   return (
     <div className="metre-container">
@@ -132,9 +173,10 @@ export default function Metre(_: MetreTableProps) {
       <button onClick={handleAddRow} style={{ marginBottom: '1rem' }}>
         ➕ Ajouter une ligne
       </button>
+
       <HotTable
         ref={hotRef}
-        data={initialData}
+        data={mainData}
         colHeaders={colHeaders}
         columns={columns}
         rowHeaders={false}
@@ -145,6 +187,15 @@ export default function Metre(_: MetreTableProps) {
         className="metre-table"
         stretchH="all"
       />
+
+      {openDetails.map(intitule => (
+        <div key={`detail-${intitule}`} style={{ marginTop: '1rem' }}>
+          <h4>Détail – {intitule}</h4>
+          <MetreDetailTable
+            onDataChange={total => handleDetailChange(intitule, total)}
+          />
+        </div>
+      ))}
     </div>
   );
 }
