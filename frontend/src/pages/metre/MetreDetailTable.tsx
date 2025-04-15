@@ -7,15 +7,17 @@ import { NumericCellType } from 'handsontable/cellTypes';
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
 interface MetreDetailTableProps {
-  onDataChange?: (total: number) => void;
+  data: any[][];
+  onDataChange?: (updated: any[][]) => void;
 }
 
-export default function MetreDetailTable({ onDataChange }: MetreDetailTableProps) {
+export default function MetreDetailTable({ data, onDataChange }: MetreDetailTableProps) {
   const detailRef = useRef<HotTableClass | null>(null);
-  const [data, setData] = useState<any[][]>([
-    ['', 1, 1, 1, 1, 1, 0],
-    ['Total', '', '', '', '', '', 0]
-  ]);
+  const [localData, setLocalData] = useState<any[][]>([...data]);
+
+  useEffect(() => {
+    setLocalData([...data]);
+  }, [data]);
 
   const colHeaders = [
     'Titre',
@@ -56,8 +58,11 @@ export default function MetreDetailTable({ onDataChange }: MetreDetailTableProps
     button.style.cursor = 'pointer';
 
     button.onclick = () => {
-      instance.alter('remove_row', row);
-      setTimeout(() => updateTotalRow(), 0); // petit délai pour laisser Handsontable finir
+      const newData = [...localData];
+      newData.splice(row, 1);
+      updateTotalRow(newData);
+      setLocalData(newData);
+      onDataChange?.(newData);
     };
 
     td.appendChild(button);
@@ -72,6 +77,7 @@ export default function MetreDetailTable({ onDataChange }: MetreDetailTableProps
     const hot = detailRef.current?.hotInstance;
     if (!hot) return;
 
+    const newData = [...localData.map(row => [...row])];
     const totalRowIndex = hot.countRows() - 1;
 
     changes.forEach(([row, col]) => {
@@ -82,49 +88,35 @@ export default function MetreDetailTable({ onDataChange }: MetreDetailTableProps
         const h = parseFloat(hot.getDataAtCell(row, 4)) || 0;
         const f = parseFloat(hot.getDataAtCell(row, 5)) || 1;
         const total = n * l * w * h * f;
-        hot.setDataAtCell(row, 6, total, 'autoCalc');
-      }
-
-      if(col === 6 && row !== hot.countRows() - 1){
-        updateTotalRow();
+        newData[row][6] = total;
       }
     });
+
+    updateTotalRow(newData);
+    setLocalData(newData);
+    onDataChange?.(newData);
   };
 
-  const updateTotalRow = () => {
-    const hot = detailRef.current?.hotInstance;
-    if (!hot) return;
-
-    const totalRowIndex = hot.countRows() - 1;
+  const updateTotalRow = (rows: any[][]) => {
+    const totalRowIndex = rows.length - 1;
     let total = 0;
 
     for (let row = 0; row < totalRowIndex; row++) {
-      const value = parseFloat(hot.getDataAtCell(row, 6)) || 0;
+      const value = parseFloat(rows[row][6]) || 0;
       total += value;
     }
 
-    hot.setDataAtCell(totalRowIndex, 6, total, 'autoCalc');
-
-    if (onDataChange) {
-      onDataChange(total);
-    }
+    rows[totalRowIndex][6] = total;
   };
 
   const handleAddRow = () => {
-    setData((prevData) => {
-      const newData = [...prevData];
-      const totalRow = newData.pop() || ['Total', '', '', '', '', '', 0];
-  
-      const newLine = ['', 1, 1, 1, 1, 1, 0];
-      newData.push(newLine, totalRow);
-  
-      return newData;
-    });
+    const newData = [...localData];
+    const totalRow = newData.pop() || ['Total', '', '', '', '', '', 0];
+    const newLine = ['', 1, 1, 1, 1, 1, 0];
+    newData.push(newLine, totalRow);
+    setLocalData(newData);
+    onDataChange?.(newData);
   };
-
-  useEffect(() => {
-    updateTotalRow();
-  }, []);
 
   return (
     <div style={{ marginBottom: '1rem' }}>
@@ -133,7 +125,7 @@ export default function MetreDetailTable({ onDataChange }: MetreDetailTableProps
       </button>
       <HotTable
         ref={detailRef}
-        data={data}
+        data={localData}
         colHeaders={colHeaders}
         columns={columns}
         rowHeaders={true}

@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+// MetreTable.tsx
+import { useEffect, useRef, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import Handsontable from 'handsontable';
 import type { HotTableClass } from '@handsontable/react';
@@ -9,32 +10,40 @@ import MetreDetailTable from './MetreDetailTable';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
-export default function MetreTable() {
+interface MetreTableProps {
+  tableKey: string;
+  data: any[][];
+  onDataChange: (data: any[][]) => void;
+  detailDataMap: Record<string, any[][]>;
+  setDetailDataMap: React.Dispatch<React.SetStateAction<Record<string, any[][]>>>;
+}
+
+export default function MetreTable({ tableKey, data, onDataChange, detailDataMap, setDetailDataMap }: MetreTableProps) {
   const hotRef = useRef<HotTableClass | null>(null);
-
-  const [mainData, setMainData] = useState<any[][]>([
-    ['340', '22.5.1', 'Toiture', 'm²', 0, 0, 0, ''],
-    ['340', '22.5.2', 'Charpente', 'm²', 0, 0, 0, ''],
-    ['Total', '', '', '', '', '', 0, '']
-  ]);
-
-  const [details, setDetails] = useState<Record<string, any[][]>>({});
+  const [localData, setLocalData] = useState<any[][]>([...data]);
   const [openDetails, setOpenDetails] = useState<string[]>([]);
 
+  useEffect(() => {
+    setLocalData([...data]);
+  }, [data]);
+
+  const getDetailKey = (intitule: string) => `${tableKey}::${intitule}`;
+
   const toggleDetail = (intitule: string) => {
+    const key = getDetailKey(intitule);
     setOpenDetails(prev =>
-      prev.includes(intitule)
-        ? prev.filter(i => i !== intitule)
-        : [...prev, intitule]
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     );
   };
 
   const handleAddRow = () => {
-    setMainData(prev => {
+    setLocalData(prev => {
       const copy = [...prev];
       const total = copy.pop() || ['Total', '', '', '', '', '', 0, ''];
       const newRow = ['', '', '', '', 0, 0, 0, ''];
-      return [...copy, newRow, total];
+      const updated = [...copy, newRow, total];
+      onDataChange(updated);
+      return updated;
     });
   };
 
@@ -42,25 +51,19 @@ export default function MetreTable() {
     const hot = hotRef.current?.hotInstance;
     if (!hot) return;
 
-    const rowIndex = hot.getData().findIndex(row => row[2] === intitule);
+    const rowIndex = localData.findIndex(row => row[2] === intitule);
     if (rowIndex !== -1) {
       hot.setDataAtCell(rowIndex, 4, totalFromDetail, 'fromDetail');
     }
   };
 
-  const updateTotalRow = () => {
-    setMainData(prev => {
-      const copy = [...prev];
-      const totalRowIndex = copy.length - 1;
-
-      let total = 0;
-      for (let i = 0; i < totalRowIndex; i++) {
-        total += parseFloat(copy[i][6]) || 0;
-      }
-
-      copy[totalRowIndex][6] = total;
-      return copy;
-    });
+  const updateTotalRow = (rows: any[][]) => {
+    const totalRowIndex = rows.length - 1;
+    let total = 0;
+    for (let i = 0; i < totalRowIndex; i++) {
+      total += parseFloat(rows[i][6]) || 0;
+    }
+    rows[totalRowIndex][6] = total;
   };
 
   const afterChange = (
@@ -69,29 +72,22 @@ export default function MetreTable() {
   ) => {
     if (!changes || source === 'loadData') return;
 
-    setMainData(prev => {
-      const newData = [...prev.map(row => [...row])];
-      const totalRowIndex = newData.length - 1;
+    const newData = [...localData.map(row => [...row])];
+    const totalRowIndex = newData.length - 1;
 
-      changes.forEach(([row, col, , newValue]) => {
-        newData[row][col as number] = newValue;
+    changes.forEach(([row, col, , newValue]) => {
+      newData[row][col as number] = newValue;
 
-        if (col === 4 || col === 5) {
-          const qte = parseFloat(newData[row][4]) || 0;
-          const pu = parseFloat(newData[row][5]) || 0;
-          newData[row][6] = qte * pu;
-        }
-      });
-
-      // Update total général
-      let total = 0;
-      for (let i = 0; i < totalRowIndex; i++) {
-        total += parseFloat(newData[i][6]) || 0;
+      if (col === 4 || col === 5) {
+        const qte = parseFloat(newData[row][4]) || 0;
+        const pu = parseFloat(newData[row][5]) || 0;
+        newData[row][6] = qte * pu;
       }
-      newData[totalRowIndex][6] = total;
-
-      return newData;
     });
+
+    updateTotalRow(newData);
+    setLocalData(newData);
+    onDataChange(newData);
   };
 
   const actionRenderer = (instance: any, td: HTMLElement, row: number) => {
@@ -107,20 +103,21 @@ export default function MetreTable() {
     deleteBtn.style.cursor = 'pointer';
 
     deleteBtn.onclick = () => {
-      const intitule = instance.getDataAtCell(row, 2); // col 2 = intitulé
+      const intitule = instance.getDataAtCell(row, 2);
+      const newData = [...localData];
+      newData.splice(row, 1);
+      updateTotalRow(newData);
+      setLocalData(newData);
+      onDataChange(newData);
 
-      // Supprime la ligne
-      instance.alter('remove_row', row);
-      updateTotalRow();
-
-      // Supprime aussi le détail associé
-      setDetails(prev => {
+      const detailKey = getDetailKey(intitule);
+      setDetailDataMap(prev => {
         const copy = { ...prev };
-        delete copy[intitule];
+        delete copy[detailKey];
         return copy;
       });
 
-      setOpenDetails(prev => prev.filter(i => i !== intitule));
+      setOpenDetails(prev => prev.filter(i => i !== detailKey));
     };
 
     const detailBtn = document.createElement('button');
@@ -169,14 +166,13 @@ export default function MetreTable() {
 
   return (
     <div className="metre-container">
-      <h1>Tableau Métré</h1>
       <button onClick={handleAddRow} style={{ marginBottom: '1rem' }}>
         ➕ Ajouter une ligne
       </button>
 
       <HotTable
         ref={hotRef}
-        data={mainData}
+        data={localData}
         colHeaders={colHeaders}
         columns={columns}
         rowHeaders={false}
@@ -188,14 +184,25 @@ export default function MetreTable() {
         stretchH="all"
       />
 
-      {openDetails.map(intitule => (
-        <div key={`detail-${intitule}`} style={{ marginTop: '1rem' }}>
-          <h4>Détail – {intitule}</h4>
-          <MetreDetailTable
-            onDataChange={total => handleDetailChange(intitule, total)}
-          />
-        </div>
-      ))}
+      {openDetails.map(detailKey => {
+        const intitule = detailKey.split('::')[1];
+        const detailData = detailDataMap[detailKey] || [
+          ['', 1, 1, 1, 1, 1, 0],
+          ['Total', '', '', '', '', '', 0]
+        ];
+        return (
+          <div key={`detail-${detailKey}`} style={{ marginTop: '1rem' }}>
+            <h4>Détail – {intitule}</h4>
+            <MetreDetailTable
+              data={detailData}
+              onDataChange={(updatedDetail) => {
+                setDetailDataMap(prev => ({ ...prev, [detailKey]: updatedDetail }));
+                handleDetailChange(intitule, updatedDetail.at(-1)?.[6] ?? 0);
+              }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
