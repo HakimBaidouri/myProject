@@ -12,7 +12,8 @@ Handsontable.cellTypes.registerCellType(NumericCellType);
 
 interface TreeNodeData {
   key: string;
-  title: string;
+  num: string;
+  label: string;
   children?: TreeNodeData[];
 }
 
@@ -20,23 +21,27 @@ export default function MetreArbo() {
   const initialTreeData = (): TreeNodeData[] => [
     {
       key: uuidv4(),
-      title: '7 - Murs',
+      num: '7',
+      label: 'Murs',
       children: [
-        { key: uuidv4(), title: '7.1 - Murs porteurs' },
-        { key: uuidv4(), title: '7.2 - Cloisons intérieures' }
+        { key: uuidv4(), num: '7.1', label: 'Murs porteurs' },
+        { key: uuidv4(), num: '7.2', label: 'Cloisons intérieures' }
       ]
     },
     {
       key: uuidv4(),
-      title: '8 - Toiture',
+      num: '8',
+      label: 'Toiture',
       children: [
-        { key: uuidv4(), title: '8.1 - Charpente' }
+        { key: uuidv4(), num: '8.1', label: 'Charpente' }
       ]
     }
   ];
 
   const [treeData, setTreeData] = useState<TreeNodeData[]>(initialTreeData);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [clickCountMap, setClickCountMap] = useState<Record<string, number>>({});
   const [tableDataMap, setTableDataMap] = useState<Record<string, any[][]>>({});
   const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>({});
 
@@ -52,15 +57,9 @@ export default function MetreArbo() {
     return tableDataMap[key];
   };
 
-  const handleDoubleClick = (_: any, node: any) => {
-    if (!node.children) {
-      setSelectedKey(node.key);
-    }
-  };
-
   const findTitleByKey = (key: string, nodes: TreeNodeData[]): string | null => {
     for (const node of nodes) {
-      if (node.key === key) return node.title;
+      if (node.key === key) return `${node.num} - ${node.label}`;
       if (node.children) {
         const found = findTitleByKey(key, node.children);
         if (found) return found;
@@ -69,19 +68,103 @@ export default function MetreArbo() {
     return null;
   };
 
+  const updateNodeLabel = (key: string, newLabel: string, nodes: TreeNodeData[]): TreeNodeData[] => {
+    return nodes.map(node => {
+      if (node.key === key) {
+        return { ...node, label: newLabel };
+      } else if (node.children) {
+        return { ...node, children: updateNodeLabel(key, newLabel, node.children) };
+      }
+      return node;
+    });
+  };
+
+  const deleteNode = (key: string, nodes: TreeNodeData[]): TreeNodeData[] => {
+    return nodes
+      .filter(node => node.key !== key)
+      .map(node => {
+        if (node.children) {
+          return { ...node, children: deleteNode(key, node.children) };
+        }
+        return node;
+      });
+  };
+
+  const addChildNode = (parentKey: string, nodes: TreeNodeData[]): TreeNodeData[] => {
+    return nodes.map(node => {
+      if (node.key === parentKey) {
+        const childCount = (node.children?.length || 0) + 1;
+        const newNum = `${node.num}.${childCount}`;
+        const newChild = { key: uuidv4(), num: newNum, label: 'Nouveau poste' };
+        return { ...node, children: [...(node.children || []), newChild] };
+      } else if (node.children) {
+        return { ...node, children: addChildNode(parentKey, node.children) };
+      }
+      return node;
+    });
+  };
+
+  const handleClick = (key: string) => {
+    setClickCountMap(prev => {
+      const newCount = (prev[key] || 0) + 1;
+      const updated = { ...prev, [key]: newCount };
+
+      if (newCount === 2) {
+        setSelectedKey(key);
+        setTimeout(() => setClickCountMap(p => ({ ...p, [key]: 0 })), 400);
+      } else if (newCount >= 3) {
+        setEditingKey(key);
+        setClickCountMap(p => ({ ...p, [key]: 0 }));
+      }
+      return updated;
+    });
+  };
+
   const renderTreeWithJSX = (nodes: TreeNodeData[]): any =>
-    nodes.map((node) => ({
-      ...node,
-      title: <span>{node.title}</span>,
-      children: node.children ? renderTreeWithJSX(node.children) : undefined
-    }));
+    nodes
+      .sort((a, b) => a.num.localeCompare(b.num, undefined, { numeric: true }))
+      .map((node) => {
+        const isEditing = editingKey === node.key;
+
+        return {
+          ...node,
+          title: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {isEditing ? (
+                <input
+                  autoFocus
+                  defaultValue={node.label}
+                  onBlur={(e) => {
+                    setTreeData(prev => updateNodeLabel(node.key, e.target.value, prev));
+                    setEditingKey(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setTreeData(prev => updateNodeLabel(node.key, (e.target as HTMLInputElement).value, prev));
+                      setEditingKey(null);
+                    }
+                  }}
+                  style={{ width: '80%' }}
+                />
+              ) : (
+                <span onClick={() => handleClick(node.key)} style={{ cursor: 'pointer' }}>
+                  {`${node.num} - ${node.label}`}
+                </span>
+              )}
+              <button onClick={() => setTreeData(prev => addChildNode(node.key, prev))}>➕</button>
+              <button onClick={() => setTreeData(prev => deleteNode(node.key, prev))}>🗑️</button>
+            </div>
+          ),
+          children: node.children ? renderTreeWithJSX(node.children) : undefined
+        };
+      });
 
   return (
     <div className="metre-layout">
       <aside className="metre-tree">
         <Tree
           treeData={renderTreeWithJSX(treeData)}
-          onDoubleClick={handleDoubleClick}
+          selectable={false}
         />
       </aside>
       <main className="metre-table-container">
@@ -89,7 +172,7 @@ export default function MetreArbo() {
           <>
             <h2>Chapitre : {findTitleByKey(selectedKey, treeData)}</h2>
             <MetreTable
-              key={selectedKey} // ça force le remount
+              key={selectedKey}
               tableKey={selectedKey}
               data={getOrCreateTableData(selectedKey)}
               onDataChange={(updatedData) =>
