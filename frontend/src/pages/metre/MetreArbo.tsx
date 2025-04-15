@@ -68,16 +68,35 @@ export default function MetreArbo() {
     return null;
   };
 
-  const updateNodeLabel = (key: string, newLabel: string, nodes: TreeNodeData[]): TreeNodeData[] => {
+  const updateNodeInfo = (key: string, newNum: string, newLabel: string, nodes: TreeNodeData[]): TreeNodeData[] => {
     return nodes.map(node => {
       if (node.key === key) {
-        return { ...node, label: newLabel };
+        const updatedNode = {
+          ...node,
+          num: newNum,
+          label: newLabel,
+          children: updateChildNums(newNum, node.children || [])
+        };
+        return updatedNode;
       } else if (node.children) {
-        return { ...node, children: updateNodeLabel(key, newLabel, node.children) };
+        return { ...node, children: updateNodeInfo(key, newNum, newLabel, node.children) };
       }
       return node;
     });
   };
+  
+  const updateChildNums = (parentNum: string, children: TreeNodeData[]): TreeNodeData[] => {
+    return children.map((child, index) => {
+      const newChildNum = `${parentNum}.${index + 1}`;
+      return {
+        ...child,
+        num: newChildNum,
+        children: child.children ? updateChildNums(newChildNum, child.children) : undefined
+      };
+    });
+  };
+  
+  
 
   const deleteNode = (key: string, nodes: TreeNodeData[]): TreeNodeData[] => {
     return nodes
@@ -131,21 +150,44 @@ export default function MetreArbo() {
           title: (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               {isEditing ? (
-                <input
-                  autoFocus
-                  defaultValue={node.label}
-                  onBlur={(e) => {
-                    setTreeData(prev => updateNodeLabel(node.key, e.target.value, prev));
-                    setEditingKey(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      setTreeData(prev => updateNodeLabel(node.key, (e.target as HTMLInputElement).value, prev));
+                <>
+                  <input
+                    defaultValue={node.num}
+                    style={{ width: '3rem' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const numInput = e.target as HTMLInputElement;
+                        const labelInput = numInput.nextElementSibling as HTMLInputElement;
+                        const newNum = numInput.value;
+                        const newLabel = labelInput?.value || node.label;
+                        setTreeData(prev => updateNodeInfo(node.key, newNum, newLabel, prev));
+                        setEditingKey(null);
+                      }
+                    }}
+                  />
+                  <input
+                    defaultValue={node.label}
+                    style={{ width: '8rem' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const labelInput = e.target as HTMLInputElement;
+                        const numInput = labelInput.previousElementSibling as HTMLInputElement;
+                        const newLabel = labelInput.value;
+                        const newNum = numInput?.value || node.num;
+                        setTreeData(prev => updateNodeInfo(node.key, newNum, newLabel, prev));
+                        setEditingKey(null);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const labelInput = e.target as HTMLInputElement;
+                      const numInput = labelInput.previousElementSibling as HTMLInputElement;
+                      const newLabel = labelInput.value;
+                      const newNum = numInput?.value || node.num;
+                      setTreeData(prev => updateNodeInfo(node.key, newNum, newLabel, prev));
                       setEditingKey(null);
-                    }
-                  }}
-                  style={{ width: '80%' }}
-                />
+                    }}
+                  />
+                </>
               ) : (
                 <span onClick={() => handleClick(node.key)} style={{ cursor: 'pointer' }}>
                   {`${node.num} - ${node.label}`}
@@ -154,14 +196,32 @@ export default function MetreArbo() {
               <button onClick={() => setTreeData(prev => addChildNode(node.key, prev))}>➕</button>
               <button onClick={() => setTreeData(prev => deleteNode(node.key, prev))}>🗑️</button>
             </div>
-          ),
+          ),          
           children: node.children ? renderTreeWithJSX(node.children) : undefined
         };
       });
 
+  const addMainChapter = () => {
+    const rootNums = treeData.map(node => parseInt(node.num)).filter(n => !isNaN(n));
+    const maxNum = rootNums.length > 0 ? Math.max(...rootNums) : 0;
+    const nextNum = (maxNum + 1).toString();
+  
+    const newChapter: TreeNodeData = {
+      key: uuidv4(),
+      num: nextNum,
+      label: 'Nouveau chapitre',
+      children: []
+    };
+  
+    setTreeData(prev => [...prev, newChapter]);
+  };
+
   return (
     <div className="metre-layout">
       <aside className="metre-tree">
+        <button onClick={addMainChapter} style={{ margin: '0.5rem' }}>
+          ➕ Ajouter un chapitre principal
+        </button>
         <Tree
           treeData={renderTreeWithJSX(treeData)}
           selectable={false}
