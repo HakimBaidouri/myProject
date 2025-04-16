@@ -48,8 +48,8 @@ export default function MetreArbo() {
   const getOrCreateTableData = (key: string): any[][] => {
     if (!tableDataMap[key]) {
       const defaultData = [
-        ['340', '22.5.1', 'Toiture', 'm²', 0, 0, 0, ''],
-        ['Total', '', '', '', '', '', 0, '']
+        ['', '22.5.1', 'Toiture', 'm²', 'QF', 0, 0, 0, ''],
+        ['Total', '', '', '', '', '', '', 0, '']
       ];
       setTableDataMap(prev => ({ ...prev, [key]: defaultData }));
       return defaultData;

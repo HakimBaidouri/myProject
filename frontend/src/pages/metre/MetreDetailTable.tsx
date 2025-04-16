@@ -27,17 +27,19 @@ export default function MetreDetailTable({ data, onDataChange }: MetreDetailTabl
     'Hauteur/Ép.',
     'Facteur',
     'Total',
-    'Actions'
+    'Commentaires',
+    ''
   ];
 
   const columns = [
-    { data: 0, type: 'text' },
-    { data: 1, type: 'numeric' },
-    { data: 2, type: 'numeric' },
-    { data: 3, type: 'numeric' },
-    { data: 4, type: 'numeric' },
-    { data: 5, type: 'numeric' },
-    { data: 6, type: 'numeric', readOnly: true },
+    { data: 0, type: 'text' },     // Titre
+    { data: 1, type: 'numeric' },  // Nombre
+    { data: 2, type: 'numeric' },  // Longueur
+    { data: 3, type: 'numeric' },  // Largeur
+    { data: 4, type: 'numeric' },  // Hauteur/Ép.
+    { data: 5, type: 'numeric' },  // Facteur
+    { data: 6, type: 'numeric', readOnly: true }, // Total
+    { data: 7, type: 'text' },     // Commentaires
     {
       data: 'actions',
       renderer: actionRenderer,
@@ -111,8 +113,8 @@ export default function MetreDetailTable({ data, onDataChange }: MetreDetailTabl
 
   const handleAddRow = () => {
     const newData = [...localData];
-    const totalRow = newData.pop() || ['Total', '', '', '', '', '', 0];
-    const newLine = ['', 1, 1, 1, 1, 1, 0];
+    const totalRow = newData.pop() || ['Total', '', '', '', '', '', 0, '', ''];
+    const newLine = ['', 1, 1, 1, 1, 1, 0, '', ''];
     newData.push(newLine, totalRow);
     setLocalData(newData);
     onDataChange?.(newData);

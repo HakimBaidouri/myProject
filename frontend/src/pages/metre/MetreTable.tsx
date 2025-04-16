@@ -39,8 +39,8 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
   const handleAddRow = () => {
     setLocalData(prev => {
       const copy = [...prev];
-      const total = copy.pop() || ['Total', '', '', '', '', '', 0, ''];
-      const newRow = ['', '', '', '', 0, 0, 0, ''];
+      const total = copy.pop() || ['Total', '', '', '', '', '', 0, 0, 0, ''];
+      const newRow = ['', '', '', '', '', 0, 0, 0, ''];
       const updated = [...copy, newRow, total];
       onDataChange(updated);
       return updated;
@@ -53,7 +53,7 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
 
     const rowIndex = localData.findIndex(row => row[2] === intitule);
     if (rowIndex !== -1) {
-      hot.setDataAtCell(rowIndex, 4, totalFromDetail, 'fromDetail');
+      hot.setDataAtCell(rowIndex, 5, totalFromDetail, 'fromDetail');
     }
   };
 
@@ -61,9 +61,9 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
     const totalRowIndex = rows.length - 1;
     let total = 0;
     for (let i = 0; i < totalRowIndex; i++) {
-      total += parseFloat(rows[i][6]) || 0;
+      total += parseFloat(rows[i][7]) || 0;
     }
-    rows[totalRowIndex][6] = total;
+    rows[totalRowIndex][7] = total;
   };
 
   const afterChange = (
@@ -78,10 +78,10 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
     changes.forEach(([row, col, , newValue]) => {
       newData[row][col as number] = newValue;
 
-      if (col === 4 || col === 5) {
-        const qte = parseFloat(newData[row][4]) || 0;
-        const pu = parseFloat(newData[row][5]) || 0;
-        newData[row][6] = qte * pu;
+      if (col === 5 || col === 6) {
+        const qte = parseFloat(newData[row][5]) || 0;
+        const pu = parseFloat(newData[row][6]) || 0;
+        newData[row][7] = qte * pu;
       }
     });
 
@@ -136,14 +136,15 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
   };
 
   const columns = [
-    { data: 0, type: 'text' },
-    { data: 1, type: 'text' },
-    { data: 2, type: 'text' },
-    { data: 3, type: 'text' },
-    { data: 4, type: 'numeric' },
-    { data: 5, type: 'numeric' },
-    { data: 6, type: 'numeric', readOnly: true },
-    { data: 7, type: 'text' },
+    { data: 0, type: 'text' }, // Gr
+    { data: 1, type: 'text' }, // Num
+    { data: 2, type: 'text' }, // Intitulé
+    { data: 3, type: 'text' }, // Nm
+    { data: 4, type: 'text' }, // Unité
+    { data: 5, type: 'numeric' }, // Quantité
+    { data: 6, type: 'numeric' }, // PU
+    { data: 7, type: 'numeric', readOnly: true }, // Prix
+    { data: 8, type: 'text' }, // Commentaires
     {
       data: 'actions',
       renderer: actionRenderer,
@@ -153,13 +154,14 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
   ];
 
   const colHeaders = [
-    'Ordre',
+    'Gr',
     'Num',
     'Intitulé',
+    'Nm',
     'Unité',
     'Quantité',
     'PU',
-    'SOM',
+    'Prix',
     'Commentaires',
     ''
   ];
@@ -175,7 +177,7 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
         data={localData}
         colHeaders={colHeaders}
         columns={columns}
-        rowHeaders={false}
+        rowHeaders={true}
         licenseKey="non-commercial-and-evaluation"
         height="auto"
         undo={true}
@@ -187,8 +189,8 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
       {openDetails.map(detailKey => {
         const intitule = detailKey.split('::')[1];
         const detailData = detailDataMap[detailKey] || [
-          ['', 1, 1, 1, 1, 1, 0],
-          ['Total', '', '', '', '', '', 0]
+          ['', 1, 1, 1, 1, 1, 0, ''],
+          ['Total', '', '', '', '', '', 0, '']
         ];
         return (
           <div key={`detail-${detailKey}`} style={{ marginTop: '1rem' }}>
