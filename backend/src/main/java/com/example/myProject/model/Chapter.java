@@ -26,5 +26,9 @@ public class Chapter {
 
     private String label;
 
+    @Transient
+    private String parentTempId;
 
+    @Transient
+    private String tempId;
 }
