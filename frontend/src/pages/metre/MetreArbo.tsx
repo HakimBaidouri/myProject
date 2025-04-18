@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Tree from 'rc-tree';
 import Handsontable from 'handsontable';
 import { NumericCellType } from 'handsontable/cellTypes';
@@ -7,6 +7,7 @@ import 'handsontable/dist/handsontable.full.min.css';
 import 'rc-tree/assets/index.css';
 import './Metre.css';
 import MetreTable from './MetreTable';
+import { useProjectLoader } from '../../hooks/useProjectLoader';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
@@ -18,6 +19,7 @@ interface TreeNodeData {
 }
 
 export default function MetreArbo() {
+
   const initialTreeData = (): TreeNodeData[] => [
     {
       key: uuidv4(),
