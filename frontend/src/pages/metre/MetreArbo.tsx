@@ -16,41 +16,106 @@ interface TreeNodeData {
   num: string;
   label: string;
   children?: TreeNodeData[];
+  parentId?: string | null;
 }
 
+
 export default function MetreArbo() {
+  
+  const { data, loading } = useProjectLoader(1); // 👈 on teste avec projet ID 1
+  const [treeData, setTreeData] = useState<TreeNodeData[]>([]);
+  const [tableDataMap, setTableDataMap] = useState<Record<string, any[][]>>({});
+  const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>({});
 
-  const initialTreeData = (): TreeNodeData[] => [
-    {
-      key: uuidv4(),
-      num: '7',
-      label: 'Murs',
-      children: [
-        { key: uuidv4(), num: '7.1', label: 'Murs porteurs' },
-        { key: uuidv4(), num: '7.2', label: 'Cloisons intérieures' }
-      ]
-    },
-    {
-      key: uuidv4(),
-      num: '8',
-      label: 'Toiture',
-      children: [
-        { key: uuidv4(), num: '8.1', label: 'Charpente' }
-      ]
-    }
-  ];
+  // Reconstruction de l'arborescence imbriquée depuis un tableau plat
+  function buildTreeFromFlatData(flat: TreeNodeData[]): TreeNodeData[] {
+    const nodeMap: Record<string, TreeNodeData> = {};
+    const roots: TreeNodeData[] = [];
 
-  const [treeData, setTreeData] = useState<TreeNodeData[]>(initialTreeData);
+    flat.forEach(node => {
+      node.children = [];
+      nodeMap[node.key] = node;
+    });
+
+    flat.forEach(node => {
+      if (node.parentId && nodeMap[node.parentId]) {
+        nodeMap[node.parentId].children!.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+
+    return roots;
+  }
+
+  // Transformation des données backend en tree + table maps
+  useEffect(() => {
+    if (!data) return;
+
+    // 1. Arborescence à partir du backend
+    const flatChapters = data.chapters.map(({ chapter }) => ({
+      key: chapter.id.toString(),
+      num: chapter.num,
+      label: chapter.label,
+      parentId: chapter.parentId ? chapter.parentId.toString() : null
+    }));
+
+    const tree = buildTreeFromFlatData(flatChapters);
+    setTreeData(tree);
+
+    // 2. Tables
+    const tables: Record<string, any[][]> = {};
+    const details: Record<string, any[][]> = {};
+
+    data.chapters.forEach(({ chapter, lines }) => {
+      const chapterId = chapter.id.toString();
+
+      const mainLines = lines.map(({ mainTableLine, details: lineDetails }) => {
+        const prix = mainTableLine.quantity * mainTableLine.unitPrice;
+        const lineKey = `${chapterId}::${mainTableLine.title}`;
+
+        details[lineKey] = [
+          ...lineDetails.map(detail => [
+            detail.title,
+            detail.number,
+            detail.length,
+            detail.width,
+            detail.height,
+            detail.factor,
+            detail.total,
+            detail.comments
+          ]),
+          ['Total', '', '', '', '', '', lineDetails.reduce((sum, d) => sum + d.total, 0), '']
+        ];
+
+        return [
+          mainTableLine.gr,
+          mainTableLine.num,
+          mainTableLine.title,
+          mainTableLine.nm,
+          mainTableLine.unit,
+          mainTableLine.quantity,
+          mainTableLine.unitPrice,
+          prix,
+          mainTableLine.comments
+        ];
+      });
+
+      tables[chapterId] = [...mainLines, ['Total', '', '', '', '', '', '', 0, '']];
+    });
+
+    setTableDataMap(tables);
+    setDetailDataMap(details);
+  }, [data]);
+
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [clickCountMap, setClickCountMap] = useState<Record<string, number>>({});
-  const [tableDataMap, setTableDataMap] = useState<Record<string, any[][]>>({});
-  const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>({});
 
   const getOrCreateTableData = (key: string): any[][] => {
     if (!tableDataMap[key]) {
       const defaultData = [
-        ['', '22.5.1', 'Toiture', 'm²', 'QF', 0, 0, 0, ''],
+        ['', '', '', '', '', '', 0, 0, 0, ''],
         ['Total', '', '', '', '', '', '', 0, '']
       ];
       setTableDataMap(prev => ({ ...prev, [key]: defaultData }));
@@ -73,42 +138,37 @@ export default function MetreArbo() {
   const updateNodeInfo = (key: string, newNum: string, newLabel: string, nodes: TreeNodeData[]): TreeNodeData[] => {
     return nodes.map(node => {
       if (node.key === key) {
-        const updatedNode = {
+        return {
           ...node,
           num: newNum,
           label: newLabel,
           children: updateChildNums(newNum, node.children || [])
         };
-        return updatedNode;
       } else if (node.children) {
         return { ...node, children: updateNodeInfo(key, newNum, newLabel, node.children) };
       }
       return node;
     });
   };
-  
+
   const updateChildNums = (parentNum: string, children: TreeNodeData[]): TreeNodeData[] => {
     return children.map((child, index) => {
-      const newChildNum = `${parentNum}.${index + 1}`;
+      const newNum = `${parentNum}.${index + 1}`;
       return {
         ...child,
-        num: newChildNum,
-        children: child.children ? updateChildNums(newChildNum, child.children) : undefined
+        num: newNum,
+        children: child.children ? updateChildNums(newNum, child.children) : undefined
       };
     });
   };
-  
-  
 
   const deleteNode = (key: string, nodes: TreeNodeData[]): TreeNodeData[] => {
     return nodes
       .filter(node => node.key !== key)
-      .map(node => {
-        if (node.children) {
-          return { ...node, children: deleteNode(key, node.children) };
-        }
-        return node;
-      });
+      .map(node => ({
+        ...node,
+        children: node.children ? deleteNode(key, node.children) : undefined
+      }));
   };
 
   const addChildNode = (parentKey: string, nodes: TreeNodeData[]): TreeNodeData[] => {
@@ -116,7 +176,12 @@ export default function MetreArbo() {
       if (node.key === parentKey) {
         const childCount = (node.children?.length || 0) + 1;
         const newNum = `${node.num}.${childCount}`;
-        const newChild = { key: uuidv4(), num: newNum, label: 'Nouveau poste' };
+        const newChild: TreeNodeData = {
+          key: uuidv4(),
+          num: newNum,
+          label: 'Nouveau poste',
+          children: []
+        };
         return { ...node, children: [...(node.children || []), newChild] };
       } else if (node.children) {
         return { ...node, children: addChildNode(parentKey, node.children) };
@@ -198,7 +263,7 @@ export default function MetreArbo() {
               <button onClick={() => setTreeData(prev => addChildNode(node.key, prev))}>➕</button>
               <button onClick={() => setTreeData(prev => deleteNode(node.key, prev))}>🗑️</button>
             </div>
-          ),          
+          ),
           children: node.children ? renderTreeWithJSX(node.children) : undefined
         };
       });
@@ -207,14 +272,14 @@ export default function MetreArbo() {
     const rootNums = treeData.map(node => parseInt(node.num)).filter(n => !isNaN(n));
     const maxNum = rootNums.length > 0 ? Math.max(...rootNums) : 0;
     const nextNum = (maxNum + 1).toString();
-  
+
     const newChapter: TreeNodeData = {
       key: uuidv4(),
       num: nextNum,
       label: 'Nouveau chapitre',
       children: []
     };
-  
+
     setTreeData(prev => [...prev, newChapter]);
   };
 
