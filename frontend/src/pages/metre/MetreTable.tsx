@@ -24,7 +24,21 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
   const [openDetails, setOpenDetails] = useState<string[]>([]);
 
   useEffect(() => {
-    setLocalData([...data]);
+    const updated = [...data.map(row => [...row])];
+  
+    const totalRowIndex = updated.length - 1;
+  
+    for (let i = 0; i < totalRowIndex; i++) {
+      const qte = parseFloat(updated[i][5]) || 0;
+      const pu = parseFloat(updated[i][6]) || 0;
+      updated[i][7] = qte * pu;
+    }
+  
+    updated[totalRowIndex][7] = updated
+      .slice(0, totalRowIndex)
+      .reduce((sum, row) => sum + (parseFloat(row[7]) || 0), 0);
+  
+    setLocalData(updated);
   }, [data]);
 
   const getDetailKey = (intitule: string) => `${tableKey}::${intitule}`;

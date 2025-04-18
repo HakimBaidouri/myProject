@@ -176,8 +176,9 @@ export default function MetreArbo() {
       if (node.key === parentKey) {
         const childCount = (node.children?.length || 0) + 1;
         const newNum = `${node.num}.${childCount}`;
+        const tempKey = `new-${uuidv4()}`;
         const newChild: TreeNodeData = {
-          key: uuidv4(),
+          key: tempKey,
           num: newNum,
           label: 'Nouveau poste',
           children: []
@@ -272,22 +273,134 @@ export default function MetreArbo() {
     const rootNums = treeData.map(node => parseInt(node.num)).filter(n => !isNaN(n));
     const maxNum = rootNums.length > 0 ? Math.max(...rootNums) : 0;
     const nextNum = (maxNum + 1).toString();
-
+  
+    const tempKey = `new-${uuidv4()}`;
+  
     const newChapter: TreeNodeData = {
-      key: uuidv4(),
+      key: tempKey,
       num: nextNum,
       label: 'Nouveau chapitre',
       children: []
     };
-
+  
     setTreeData(prev => [...prev, newChapter]);
   };
-
+      
+  const saveProject = async () => {
+    if (!data) return;
+  
+    // 1. Recréer un tableau plat de chapitres à partir de treeData
+    const flattenChapters = (nodes: TreeNodeData[], parentTempId: string | null = null): any[] => {
+      return nodes.flatMap((node) => {
+        const isNew = node.key.startsWith('new-');
+    
+        const self = {
+          id: isNew ? null : Number(node.key),     // id null si nouvel élément
+          tempId: node.key,                        // utilisé comme identifiant temporaire
+          parentId: null,                          // toujours null dans le JSON (évite les erreurs)
+          parentTempId: parentTempId,              // lien logique utilisé par le backend
+          num: node.num,
+          label: node.label,
+          projectId: data.project.id
+        };
+    
+        const children = node.children ? flattenChapters(node.children, node.key) : [];
+        return [self, ...children];
+      });
+    };
+    
+    const flatChapters = flattenChapters(treeData);
+  
+    // 2. Construit les ChapterWithLinesDTO[]
+    const chapters = flatChapters.map(ch => {
+      const chapterId = ch.id ?? ch.tempId;
+      const rawLines = tableDataMap[chapterId] || [];
+      const lines = rawLines
+        .filter(row => row[0] !== 'Total') // skip total
+        .map((row, i) => {
+          const lineKey = `${chapterId}::${row[2]}`; // based on title
+          const rawDetails = detailDataMap[lineKey] || [];
+  
+          const details = rawDetails
+            .filter(row => row[0] !== 'Total')
+            .map((d, i) => ({
+              id: null,
+              mainTableLineId: null,
+              title: d[0],
+              number: d[1],
+              length: d[2],
+              width: d[3],
+              height: d[4],
+              factor: d[5],
+              total: d[6],
+              comments: d[7],
+              position: i
+            }));
+  
+          return {
+            mainTableLine: {
+              id: null,
+              chapterId: null,
+              gr: row[0],
+              num: row[1],
+              title: row[2],
+              nm: row[3],
+              unit: row[4],
+              quantity: row[5],
+              unitPrice: row[6],
+              totalPrice: row[7],
+              comments: row[8],
+              position: i
+            },
+            details
+          };
+        });
+  
+      return {
+        chapter: ch,
+        lines
+      };
+    });
+  
+    // 3. Construction finale du payload
+    const payload = {
+      project: {
+        id: data.project.id,
+        name: data.project.name,
+        userId: data.project.userId,
+        companyId: data.project.companyId
+      },
+      chapters
+    };
+  
+    // 4. Envoi vers l'API
+    try {
+      console.log("🚀 Payload projet à envoyer :", payload);
+      const res = await fetch(`http://localhost:8080/myProject/api/projects/${data.project.id}/full`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+  
+      if (res.ok) {
+        alert('Projet enregistré avec succès !');
+      } else {
+        alert('Erreur à l’enregistrement (HTTP ' + res.status + ')');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la requête');
+    }
+  };
+  
   return (
     <div className="metre-layout">
       <aside className="metre-tree">
         <button onClick={addMainChapter} style={{ margin: '0.5rem' }}>
           ➕ Ajouter un chapitre principal
+        </button>
+        <button onClick={saveProject} style={{ margin: '0.5rem' }}>
+          💾 Enregistrer le projet
         </button>
         <Tree
           treeData={renderTreeWithJSX(treeData)}

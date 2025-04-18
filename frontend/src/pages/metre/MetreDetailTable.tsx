@@ -16,9 +16,27 @@ export default function MetreDetailTable({ data, onDataChange }: MetreDetailTabl
   const [localData, setLocalData] = useState<any[][]>([...data]);
 
   useEffect(() => {
-    setLocalData([...data]);
-  }, [data]);
-
+    const hot = detailRef.current?.hotInstance;
+    if (!hot) return;
+  
+    const rows = hot.getData();
+    const totalRowIndex = rows.length - 1;
+  
+    for (let i = 0; i < totalRowIndex; i++) {
+      const n = parseFloat(rows[i][1]) || 0;
+      const l = parseFloat(rows[i][2]) || 0;
+      const w = parseFloat(rows[i][3]) || 0;
+      const h = parseFloat(rows[i][4]) || 0;
+      const f = parseFloat(rows[i][5]) || 1;
+      const total = n * l * w * h * f;
+  
+      rows[i][6] = total;
+    }
+  
+    updateTotalRow(rows); 
+    setLocalData([...rows]);
+  }, []);
+  
   const colHeaders = [
     'Titre',
     'Nombre',
