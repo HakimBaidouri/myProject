@@ -1,4 +1,8 @@
 export default function Home() {
-    return <h1>Bienvenue sur la page d’accueil</h1>;
-  }
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <h1>Hello</h1>
+    </div>
+  )
+}
   

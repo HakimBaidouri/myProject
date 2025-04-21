@@ -39,10 +39,8 @@ export default function MetreArbo() {
 
     flat.forEach(node => {
       if (node.parentId && nodeMap[node.parentId]) {
-        console.log(`🔗 ${node.num} devient enfant de ${node.parentId}`);
         nodeMap[node.parentId].children!.push(node);
       } else {
-        console.log(`🌳 ${node.num} devient root`);
         roots.push(node);
       }
     });
@@ -61,8 +59,6 @@ export default function MetreArbo() {
       label: chapter.label,
       parentId: chapter.parentId ? chapter.parentId.toString() : null
     }));
-
-    console.log("📦 flatChapters :", flatChapters);
 
     const tree = buildTreeFromFlatData(flatChapters);
     setTreeData(tree);
