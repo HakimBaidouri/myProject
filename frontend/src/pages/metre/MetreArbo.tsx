@@ -39,12 +39,14 @@ export default function MetreArbo() {
 
     flat.forEach(node => {
       if (node.parentId && nodeMap[node.parentId]) {
+        console.log(`🔗 ${node.num} devient enfant de ${node.parentId}`);
         nodeMap[node.parentId].children!.push(node);
       } else {
+        console.log(`🌳 ${node.num} devient root`);
         roots.push(node);
       }
     });
-
+    
     return roots;
   }
 
@@ -59,6 +61,8 @@ export default function MetreArbo() {
       label: chapter.label,
       parentId: chapter.parentId ? chapter.parentId.toString() : null
     }));
+
+    console.log("📦 flatChapters :", flatChapters);
 
     const tree = buildTreeFromFlatData(flatChapters);
     setTreeData(tree);
@@ -290,24 +294,25 @@ export default function MetreArbo() {
     if (!data) return;
   
     // 1. Recréer un tableau plat de chapitres à partir de treeData
-    const flattenChapters = (nodes: TreeNodeData[], parentTempId: string | null = null): any[] => {
+    const flattenChapters = (nodes: TreeNodeData[], parentNode: TreeNodeData | null = null): any[] => {
       return nodes.flatMap((node) => {
         const isNew = node.key.startsWith('new-');
+        const parentIsNew = parentNode?.key?.startsWith('new-');
     
-        const self = {
-          id: isNew ? null : Number(node.key),     // id null si nouvel élément
-          tempId: node.key,                        // utilisé comme identifiant temporaire
-          parentId: null,                          // toujours null dans le JSON (évite les erreurs)
-          parentTempId: parentTempId,              // lien logique utilisé par le backend
+        const chapter = {
+          id: isNew ? null : Number(node.key),
+          tempId: node.key,
+          parentId: !isNew && parentNode && !parentIsNew ? Number(parentNode.key) : null,
+          parentTempId: isNew && parentNode ? parentNode.key : null,
           num: node.num,
           label: node.label,
           projectId: data.project.id
         };
     
-        const children = node.children ? flattenChapters(node.children, node.key) : [];
-        return [self, ...children];
+        const children = node.children ? flattenChapters(node.children, node) : [];
+        return [chapter, ...children];
       });
-    };
+    };    
     
     const flatChapters = flattenChapters(treeData);
   

@@ -98,7 +98,7 @@ public class ProjectController {
     }
 
     @PutMapping("/{id}/full")
-    public void syncProject(@PathVariable Long id, @RequestBody ProjectFullDTO fullDTO) {
+        public void syncProject(@PathVariable Long id, @RequestBody ProjectFullDTO fullDTO) {
 
         Project project = projectRepository.findById(id).orElseThrow();
         project.setName(fullDTO.getProject().getName());
@@ -114,10 +114,9 @@ public class ProjectController {
             Chapter chapter = chapterDTO.getChapter();
             chapter.setProjectId(id);
 
-            String tempId = chapter.getTempId(); // doit être fourni par le frontend
-            chapter.setParentId(null); // temporairement
-
+            String tempId = chapter.getTempId();
             Chapter saved = chapterRepository.save(chapter);
+
             if (tempId != null) {
                 tempIdToRealId.put(tempId, saved.getId());
             }
@@ -132,13 +131,24 @@ public class ProjectController {
             Chapter chapter = chapterDTO.getChapter();
             String parentTempId = chapter.getParentTempId();
 
+            Chapter updated = chapterRepository.findById(chapter.getId()).orElseThrow();
+
             if (parentTempId != null && tempIdToRealId.containsKey(parentTempId)) {
-                chapter.setParentId(tempIdToRealId.get(parentTempId));
-                chapterRepository.save(chapter); // update
+                // ✅ Parent temporaire → on convertit
+                updated.setParentId(tempIdToRealId.get(parentTempId));
+                System.out.println("✅ parentId mis à jour via parentTempId : " + updated.getParentId());
+            } else {
+                // ✅ Aucun parentTempId → on conserve le parentId réel s’il existe
+                updated.setParentId(chapter.getParentId());
+                System.out.println("✅ parentId conservé depuis payload : " + updated.getParentId());
             }
+
+            chapterRepository.save(updated);
+            chapterDTO.setChapter(updated); // important pour suite du traitement
         }
 
-        // 3. Traitement des lignes et détails
+
+        // 3. Traitement des lignes principales et détails
         for (ChapterWithLinesDTO chapterDTO : fullDTO.getChapters()) {
             Chapter chapter = chapterDTO.getChapter();
             List<Long> sentLineIds = new ArrayList<>();
@@ -167,15 +177,18 @@ public class ProjectController {
                 }
             }
 
-            // Supprimer les lignes principales retirées
+            // Supprimer les lignes principales retirées (avec suppression des détails d'abord)
             List<MainTableLine> existingLines = mainTableLineRepository.findByChapterId(chapter.getId());
             for (MainTableLine existing : existingLines) {
                 if (!sentLineIds.contains(existing.getId())) {
+                    List<DetailTableLine> details = detailTableLineRepository.findByMainTableLineId(existing.getId());
+                    detailTableLineRepository.deleteAll(details);
                     mainTableLineRepository.delete(existing);
                 }
             }
         }
 
+        // 4. Suppression récursive des chapitres supprimés
         List<Chapter> existingChapters = chapterRepository.findByProjectId(id);
         Set<Long> sentChapterIdSet = new HashSet<>(sentChapterIds);
 
@@ -184,7 +197,10 @@ public class ProjectController {
                 deleteChapterRecursively(existing.getId());
             }
         }
+
+        System.out.println("✅ Projet synchronisé avec succès.");
     }
+
 
     private void deleteChapterRecursively(Long chapterId) {
         List<Chapter> children = chapterRepository.findAll().stream()
