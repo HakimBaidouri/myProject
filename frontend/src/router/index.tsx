@@ -2,6 +2,8 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from '../App';
 import Home from '../pages/Home';
 import MetreArbo from '../pages/metre/MetreArbo';
+import ChapterEditorSandbox from '../pages/textEditor/ChapterEditorSandbox';
+
 
 const router = createBrowserRouter([
   {
@@ -9,7 +11,8 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Home /> },
-      { path: 'metre', element: <MetreArbo/> }
+      { path: 'metre', element: <MetreArbo/> },
+      { path: 'sandbox-editor', element: <ChapterEditorSandbox /> }
     ]
   }
 ]);

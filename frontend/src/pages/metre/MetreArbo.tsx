@@ -8,6 +8,7 @@ import 'rc-tree/assets/index.css';
 import './Metre.css';
 import MetreTable from './MetreTable';
 import { useProjectLoader } from '../../hooks/useProjectLoader';
+import ChapterEditor from '../textEditor/ChapterEditor';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
@@ -26,6 +27,9 @@ export default function MetreArbo() {
   const [treeData, setTreeData] = useState<TreeNodeData[]>([]);
   const [tableDataMap, setTableDataMap] = useState<Record<string, any[][]>>({});
   const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>({});
+  const [activeTab, setActiveTab] = useState<'table' | 'doc'>('table');
+  const [chapterTextMap, setChapterTextMap] = useState<Record<string, string>>({});
+
 
   // Reconstruction de l'arborescence imbriquée depuis un tableau plat
   function buildTreeFromFlatData(flat: TreeNodeData[]): TreeNodeData[] {
@@ -412,16 +416,43 @@ export default function MetreArbo() {
         {selectedKey && (
           <>
             <h2>Chapitre : {findTitleByKey(selectedKey, treeData)}</h2>
-            <MetreTable
-              key={selectedKey}
-              tableKey={selectedKey}
-              data={getOrCreateTableData(selectedKey)}
-              onDataChange={(updatedData) =>
-                setTableDataMap(prev => ({ ...prev, [selectedKey]: updatedData }))
-              }
-              detailDataMap={detailDataMap}
-              setDetailDataMap={setDetailDataMap}
-            />
+
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+              <button
+                onClick={() => setActiveTab('table')}
+                style={{ fontWeight: activeTab === 'table' ? 'bold' : 'normal' }}
+              >
+                Tableur
+              </button>
+              <button
+                onClick={() => setActiveTab('doc')}
+                style={{ fontWeight: activeTab === 'doc' ? 'bold' : 'normal' }}
+              >
+                Cahier des charges
+              </button>
+            </div>
+
+            {activeTab === 'table' ? (
+              <MetreTable
+                key={selectedKey}
+                tableKey={selectedKey}
+                data={getOrCreateTableData(selectedKey)}
+                onDataChange={(updatedData) =>
+                  setTableDataMap(prev => ({ ...prev, [selectedKey]: updatedData }))
+                }
+                detailDataMap={detailDataMap}
+                setDetailDataMap={setDetailDataMap}
+              />
+            ) : (
+              <textarea
+                value={chapterTextMap[selectedKey] || ''}
+                onChange={(e) =>
+                  setChapterTextMap(prev => ({ ...prev, [selectedKey]: e.target.value }))
+                }
+                style={{ width: '100%', height: '300px', fontSize: '1rem' }}
+                placeholder="Rédigez ici le cahier des charges pour ce chapitre..."
+              />
+            )}
           </>
         )}
       </main>
