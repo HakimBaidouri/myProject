@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/store/use-editor-store";
-import { LucideIcon, Undo2Icon } from "lucide-react";
+import { LucideIcon, PrinterIcon, Redo2Icon, SpellCheckIcon, Undo2Icon } from "lucide-react";
 
 interface ToolbarButtonProps{
     onClick? : () => void;
@@ -37,10 +37,29 @@ export default function Toolbar(){
     } [][] = [
         [
             {
-                label:"Undo",
+                label: "Undo",
                 icon: Undo2Icon,
                 onClick: () => editor?.chain().focus().undo().run(),
-            }
+            },
+            {
+                label: "Redo",
+                icon: Redo2Icon,
+                onClick: () => editor?.chain().focus().redo().run(),
+            },
+            {
+                label: "Print",
+                icon: PrinterIcon,
+                onClick: () => window.print(),
+            },
+            {
+                label: "Spell Check",
+                icon: SpellCheckIcon,
+                onClick: () => {
+                    const current = editor?.view.dom.getAttribute("spellcheck");
+                    editor?.view.dom.setAttribute("spellcheck", current === "false" ? "true" : "false");
+                }
+            },
+            
         ]
     ];
 
