@@ -8,6 +8,7 @@ import TableRow from '@tiptap/extension-table-row'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import ImageResize from "tiptap-extension-resize-image"
+import Underline from '@tiptap/extension-underline'
 import Toolbar from './Toolbar'
 import { useEditorStore } from "@/store/use-editor-store"
 
@@ -47,6 +48,7 @@ export default function ChapterEditorSandbox() {
         },
         extensions: [
             StarterKit,
+            Underline,
             Image,
             ImageResize,
             Table,
