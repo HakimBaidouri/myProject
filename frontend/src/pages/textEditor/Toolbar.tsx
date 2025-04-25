@@ -659,6 +659,7 @@ export default function Toolbar(){
             {sections[2].map((item) => (
                 <ToolbarButton key={item.label} {...item}/>
             ))}
+            <Separator orientation="vertical" className="h-6 bg-neutral-300" />
         </div>
     )
 }
