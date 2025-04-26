@@ -390,7 +390,7 @@ export default function MetreArbo() {
       if (res.ok) {
         alert('Projet enregistré avec succès !');
       } else {
-        alert('Erreur à l’enregistrement (HTTP ' + res.status + ')');
+        alert(`Erreur à l'enregistrement (HTTP ${res.status})`);
       }
     } catch (err) {
       console.error(err);
@@ -444,13 +444,18 @@ export default function MetreArbo() {
                 setDetailDataMap={setDetailDataMap}
               />
             ) : (
-              <textarea
-                value={chapterTextMap[selectedKey] || ''}
-                onChange={(e) =>
-                  setChapterTextMap(prev => ({ ...prev, [selectedKey]: e.target.value }))
+              <ChapterEditor
+                key={selectedKey}
+                tableKey={selectedKey}
+                tableData={getOrCreateTableData(selectedKey)}
+                onTableChange={(updatedData) =>
+                  setTableDataMap(prev => ({ ...prev, [selectedKey]: updatedData }))
                 }
-                style={{ width: '100%', height: '300px', fontSize: '1rem' }}
-                placeholder="Rédigez ici le cahier des charges pour ce chapitre..."
+                detailDataMap={detailDataMap}
+                setDetailDataMap={setDetailDataMap}
+                chapterNotes={chapterTextMap}
+                setChapterNotes={setChapterTextMap}
+                disablePrint={true}
               />
             )}
           </>

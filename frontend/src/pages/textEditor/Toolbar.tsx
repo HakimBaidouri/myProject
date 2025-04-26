@@ -559,7 +559,11 @@ const ToolbarButton = ({
     )
 }
 
-export default function Toolbar(){
+interface ToolbarProps {
+  disablePrint?: boolean;
+}
+
+export default function Toolbar({ disablePrint = false }: ToolbarProps){
     const { editor } = useEditorStore();
 
     const sections: {
@@ -579,11 +583,11 @@ export default function Toolbar(){
                 icon: Redo2Icon,
                 onClick: () => editor?.chain().focus().redo().run(),
             },
-            {
+            ...(disablePrint ? [] : [{
                 label: "Print",
                 icon: PrinterIcon,
                 onClick: () => window.print(),
-            },
+            }]),
             {
                 label: "Spell Check",
                 icon: SpellCheckIcon,
