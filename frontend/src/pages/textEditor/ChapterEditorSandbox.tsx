@@ -15,13 +15,16 @@ import { Color } from '@tiptap/extension-color'
 import Highlight from '@tiptap/extension-highlight'
 import Link from '@tiptap/extension-link'
 import TextAlign from '@tiptap/extension-text-align'
+import { CustomPaginationExtension } from '@/extensions/custom-pagination'
 import Toolbar from './Toolbar'
+import './ChapterEditor.css'
 
 import { useEditorStore } from "@/store/use-editor-store"
 import { FontSizeExtension } from '@/extensions/font-size'
 import { LineHeightExtension } from '@/extensions/line-height'
 import { Ruler } from './Ruler'
 import { useState } from 'react'
+
 
 export default function ChapterEditorSandbox() {
     const { setEditor } = useEditorStore();
@@ -42,6 +45,10 @@ export default function ChapterEditorSandbox() {
         },
         onSelectionUpdate({ editor }) {
             setEditor(editor);
+            const { state } = editor;
+            const { selection } = state;
+            const { $from, $to } = selection;
+            console.log("Selection updated:", $from.pos, $to.pos);
         },
         onTransaction({ editor }) {
             setEditor(editor);
@@ -57,12 +64,13 @@ export default function ChapterEditorSandbox() {
         },
         editorProps:{
             attributes: {
-                style: `padding-left: ${leftMargin}px; padding-right: ${rightMargin}px;`,
-                class: "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 pr-14 pb-10 cursor-text"
+                // style: `padding-left: ${leftMargin}px; padding-right: ${rightMargin}px;`,
+                class: "focus:outline-none print:border-0 bg-white",
             }
         },
         extensions: [
             StarterKit,
+            CustomPaginationExtension,
             LineHeightExtension,
             FontSizeExtension,
             TextAlign.configure({
@@ -92,37 +100,61 @@ export default function ChapterEditorSandbox() {
             TaskList,
         ],
         content: `
-            <table>
-            <tbody>
-                <tr>
-                <th>Name</th>
-                <th colspan="3">Description</th>
-                </tr>
-                <tr>
-                <td>Cyndi Lauper</td>
-                <td>Singer</td>
-                <td>Songwriter</td>
-                <td>Actress</td>
-                </tr>
-            </tbody>
-            </table>
+           <h1>Hello World</h1>
         `,
     })
 
     return (
-        <div className='min-h-screen bg-[#FAFBFD]'>
-            <Toolbar></Toolbar>
+        <div className='min-h-screen bg-[#FAFBFD] print:bg-white'>
+            <div className="print:hidden">
+                <Toolbar></Toolbar>
+            </div>
             <div className='size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible'>
-            <Ruler
-                onMarginsChange={(left, right) => {
-                    setLeftMargin(left);
-                    setRightMargin(right);
-                }}
-            />
-                <div className='min-w-max flex justify-center w-[816px] py-4 print:py-0 mx-auto print:w-full print:min-w-0'>
+                <div className="print:hidden pb-4">
+                    <Ruler
+                        onMarginsChange={(left, right) => {
+                            setLeftMargin(left);
+                            setRightMargin(right);
+                            // Mettre à jour le style CSS dynamiquement
+                            const style = document.createElement('style');
+                            style.textContent = `
+                                [data-page-body="true"] {
+                                    padding: 0px ${right}px 0px ${left}px !important;
+                                }
+                                @media print {
+                                    [data-page-body="true"] {
+                                        padding: 0px ${right}px 0px ${left}px !important;
+                                    }
+                                }
+                            `;
+                            // Supprimer l'ancien style s'il existe
+                            const oldStyle = document.getElementById('dynamic-margins');
+                            if (oldStyle) {
+                                oldStyle.remove();
+                            }
+                            style.id = 'dynamic-margins';
+                            document.head.appendChild(style);
+                        }}
+                    />
+                </div>
+                <div className='min-w-max flex justify-center w-[816px] print:py-0 mx-auto print:w-full print:min-w-0'>
                     <EditorContent editor={editor}/>
                 </div>
             </div>
+            <style>
+                {`
+                    @media print {
+                        @page {
+                            margin: 0;
+                            size: A4;
+                        }
+                        body {
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                    }
+                `}
+            </style>
         </div>
     );
 }
