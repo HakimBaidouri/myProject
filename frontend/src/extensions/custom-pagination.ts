@@ -12,10 +12,10 @@ export const CustomPaginationExtension = Extension.create({
         useDeviceThemeForPaperColour: false,
         defaultPaperOrientation: "portrait",
         defaultMarginConfig: {
-          top: 10,
-          right: 10,
-          bottom: 10,
-          left: 10
+          top: 40,
+          right: 75,
+          bottom: 0,
+          left: 75
         },
         defaultPageBorders: {
           top: 1,
@@ -26,7 +26,10 @@ export const CustomPaginationExtension = Extension.create({
         pageAmendmentOptions: {
           enableHeader: false,
           enableFooter: false
-        }
+        },
+        pageHeight: 1122.52,
+        pageWidth: 816,
+        autoPageBreak: true
       }),
       PageNode,
       HeaderFooterNode,

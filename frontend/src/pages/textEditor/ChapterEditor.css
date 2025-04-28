@@ -1,15 +1,9 @@
-[data-page="true"] {
-    width: 816px !important;
-    margin-top: 0 !important;
-}
-
-[data-page-body="true"] {
-    border: none !important;
-    margin: 0px !important;
-    padding: 40px 75px !important;
+/* Styles de base pour l'éditeur */
+.tiptap {
     outline: none !important;
-    width: 100% !important;
-    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
 }
 
 /* Styles des titres */
@@ -52,13 +46,66 @@
     list-style-type: "-" !important;
 }
 
-/* Pour s'assurer que les marges sont appliquées même en mode impression */
+/* Styles pour les tableaux */
+.tiptap table {
+    border-collapse: collapse !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+.tiptap td, .tiptap th {
+    border: 1px solid #ced4da !important;
+    box-sizing: border-box !important;
+    min-width: 1em !important;
+    padding: 3px 5px !important;
+    position: relative !important;
+    vertical-align: top !important;
+}
+
+.tiptap th {
+    background-color: #f1f3f5 !important;
+    font-weight: bold !important;
+    text-align: left !important;
+}
+
+/* Styles pour les images */
+.tiptap img {
+    max-width: 100% !important;
+    height: auto !important;
+}
+
+/* Styles pour les liens */
+.tiptap a {
+    color: #68cef8 !important;
+    text-decoration: underline !important;
+}
+
+/* Styles pour les tâches */
+.tiptap ul[data-type="taskList"] {
+    list-style: none !important;
+    padding: 0 !important;
+}
+
+.tiptap ul[data-type="taskList"] li {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+    margin-right: 0.5rem !important;
+    user-select: none !important;
+}
+
+.tiptap ul[data-type="taskList"] li > div {
+    flex: 1 !important;
+}
+
+/* Styles pour l'impression */
 @media print {
     /* Masquer tous les éléments non nécessaires */
-    .print\\:hidden,
-    .print\\:p-0,
-    .print\\:bg-white,
-    .print\\:overflow-visible {
+    .print\\:hidden {
         display: none !important;
     }
 
@@ -69,17 +116,8 @@
         padding: 0 !important;
     }
 
-    [data-page="true"] {
-        width: 816px !important;
-        margin-top: 0 !important;
-        border: none !important;
-    }
-    [data-page-body="true"] {
-        margin: 10px !important;
-        padding: 40px 56px !important;
-        outline: none !important;
-        width: 100% !important;
-        height: 100% !important;
-        border: none !important;
+    /* Assurer que les marges sont correctement appliquées en mode impression */
+    .tiptap {
+        padding: 40px 75px !important;
     }
 } 

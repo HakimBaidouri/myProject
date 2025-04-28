@@ -17,7 +17,6 @@ import { Color } from '@tiptap/extension-color'
 import Highlight from '@tiptap/extension-highlight'
 import Link from '@tiptap/extension-link'
 import TextAlign from '@tiptap/extension-text-align'
-import { CustomPaginationExtension } from '@/extensions/custom-pagination'
 import Toolbar from './Toolbar'
 import './ChapterEditor.css'
 import { useEditorStore } from "@/store/use-editor-store"
@@ -65,6 +64,10 @@ export default function ChapterEditor({
     },
     onSelectionUpdate({ editor }) {
       setEditor(editor);
+      const { state } = editor;
+      const { selection } = state;
+      const { $from, $to } = selection;
+      console.log("Selection updated:", $from.pos, $to.pos);
     },
     onTransaction({ editor }) {
       setEditor(editor);
@@ -77,12 +80,12 @@ export default function ChapterEditor({
     },
     editorProps: {
       attributes: {
-        class: "focus:outline-none print:border-0 bg-white",
+        style: `padding-left: ${leftMargin}px; padding-right: ${rightMargin}px;`,
+        class: "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 pr-14 pb-10 cursor-text",
       }
     },
     extensions: [
       StarterKit,
-      CustomPaginationExtension,
       LineHeightExtension,
       FontSizeExtension,
       TextAlign.configure({
@@ -114,58 +117,66 @@ export default function ChapterEditor({
     content: chapterNotes[tableKey] || `
       <h4>DESCRIPTION</h4>
       <h5>- Définition / Comprend</h5>
+      <p></p>
       <h5>- Remarques importantes</h5>
+      <p></p>
       <h4>MATÉRIAUX</h4>
+      <p></p>
       <h4>EXÉCUTION / MISE EN ŒUVRE</h4>
+      <p></p>
       <h4>CONTRÔLE</h4>
+      <p></p>
       <h4>DOCUMENTS DE RÉFÉRENCE</h4>
       <h5>- Matériau</h5>
+      <p></p>
       <h5>- Exécution</h5>
+      <p></p>
       <h4>PRÉSCRIPTION SPÉCIALES</h4>
       <h5>- Divers</h5>
+      <p></p>
       <h4>AIDE</h4>
+      <p></p>
       <h4>A CLASSER</h4>
+      <p></p>
       <h4>MESURAGE</h4>
+      <h5>- unité de mesure: </h5>
+      <h5>- code de mesurage: </h5>
+      <h5>- nature du marché: </h5>
     `,
   })
 
   return (
-    <div>
-      <div className={`min-h-screen bg-[#FAFBFD] ${disablePrint ? 'print:hidden' : 'print:bg-white'}`}>
-        <div className="print:hidden">
-          <Toolbar disablePrint={disablePrint} />
+    <div className='min-h-screen bg-[#FAFBFD] print:bg-white'>
+      <div className="print:hidden">
+        <Toolbar disablePrint={disablePrint} />
+      </div>
+      <div className='size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible'>
+        <div className="print:hidden pb-4">
+          <Ruler
+            onMarginsChange={(left, right) => {
+              setLeftMargin(left);
+              setRightMargin(right);
+            }}
+          />
         </div>
-        <div className='size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible'>
-          <div className="print:hidden pb-4">
-            <Ruler
-              onMarginsChange={(left, right) => {
-                setLeftMargin(left);
-                setRightMargin(right);
-                const style = document.createElement('style');
-                style.textContent = `
-                  [data-page-body="true"] {
-                    padding: 40px ${right}px 0px ${left}px !important;
-                  }
-                  @media print {
-                    [data-page-body="true"] {
-                      padding: 40px ${right}px 0px ${left}px !important;
-                    }
-                  }
-                `;
-                const oldStyle = document.getElementById('dynamic-margins');
-                if (oldStyle) {
-                  oldStyle.remove();
-                }
-                style.id = 'dynamic-margins';
-                document.head.appendChild(style);
-              }}
-            />
-          </div>
-          <div className='min-w-max flex justify-center w-[816px] print:py-0 mx-auto print:w-full print:min-w-0'>
-            <EditorContent editor={editor}/>
-          </div>
+        <div className='min-w-max flex justify-center w-[816px] py-4 print:py-0 mx-auto print:w-full print:min-w-0'>
+          <EditorContent editor={editor}/>
         </div>
       </div>
+      <style>
+        {`
+          @media print {
+            @page {
+              margin: 0;
+              size: A4;
+            }
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        `}
+      </style>
     </div>
   );
 }
