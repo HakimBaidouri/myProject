@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MetreTable from '../metre/MetreTable';
 import { useEditor, EditorContent } from '@tiptap/react'
 import TaskItem from '@tiptap/extension-task-item'
@@ -23,6 +23,7 @@ import { useEditorStore } from "@/store/use-editor-store"
 import { FontSizeExtension } from '@/extensions/font-size'
 import { LineHeightExtension } from '@/extensions/line-height'
 import { Ruler } from './Ruler'
+import useChapterStorage from '@/hooks/useChapterStorage'
 
 interface ChapterEditorProps {
   tableKey: string;
@@ -48,6 +49,25 @@ export default function ChapterEditor({
   const { setEditor } = useEditorStore();
   const [leftMargin, setLeftMargin] = useState(75);
   const [rightMargin, setRightMargin] = useState(75);
+  
+  // Utiliser le hook de sauvegarde des chapitres
+  const { 
+    saveChapter, 
+    loadChapter, 
+    lastSaved 
+  } = useChapterStorage(chapterNotes);
+  
+  // Sauvegarder automatiquement les modifications
+  useEffect(() => {
+    if (chapterNotes[tableKey]) {
+      saveChapter(tableKey, chapterNotes[tableKey]);
+    }
+  }, [chapterNotes, tableKey, saveChapter]);
+
+  // Fonction pour charger un chapitre
+  const handleLoadChapter = (key: string, content: string) => {
+    setChapterNotes(prev => ({ ...prev, [key]: content }));
+  };
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -114,29 +134,39 @@ export default function ChapterEditor({
       }),
       TaskList,
     ],
-    content: chapterNotes[tableKey] || `
+    content: chapterNotes[tableKey] || loadChapter(tableKey) || `
       <h4>DESCRIPTION</h4>
       <h5>- Définition / Comprend</h5>
       <p></p>
+      <p></p>
       <h5>- Remarques importantes</h5>
+      <p></p>
       <p></p>
       <h4>MATÉRIAUX</h4>
       <p></p>
+      <p></p>
       <h4>EXÉCUTION / MISE EN ŒUVRE</h4>
       <p></p>
+      <p></p>
       <h4>CONTRÔLE</h4>
+      <p></p>
       <p></p>
       <h4>DOCUMENTS DE RÉFÉRENCE</h4>
       <h5>- Matériau</h5>
       <p></p>
+      <p></p>
       <h5>- Exécution</h5>
+      <p></p>
       <p></p>
       <h4>PRÉSCRIPTION SPÉCIALES</h4>
       <h5>- Divers</h5>
       <p></p>
+      <p></p>
       <h4>AIDE</h4>
       <p></p>
+      <p></p>
       <h4>A CLASSER</h4>
+      <p></p>
       <p></p>
       <h4>MESURAGE</h4>
       <h5>- unité de mesure: </h5>
@@ -151,7 +181,7 @@ export default function ChapterEditor({
         <Toolbar disablePrint={disablePrint} />
       </div>
       <div className='size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible'>
-        <div className="print:hidden pb-4">
+        <div className="print:hidden pb-4 flex justify-between items-center">
           <Ruler
             onMarginsChange={(left, right) => {
               setLeftMargin(left);
@@ -162,6 +192,11 @@ export default function ChapterEditor({
         <div className='min-w-max flex justify-center w-[816px] py-4 print:py-0 mx-auto print:w-full print:min-w-0'>
           <EditorContent editor={editor}/>
         </div>
+        {lastSaved && (
+          <div className="print:hidden text-xs text-gray-500 text-center mt-2">
+            Dernière sauvegarde: {lastSaved.toLocaleTimeString()}
+          </div>
+        )}
       </div>
       <style>
         {`
