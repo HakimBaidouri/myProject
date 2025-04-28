@@ -6,10 +6,50 @@
 [data-page-body="true"] {
     border: none !important;
     margin: 0px !important;
-    padding: 40px 56px !important;
+    padding: 40px 75px !important;
     outline: none !important;
     width: 100% !important;
     height: 100% !important;
+}
+
+/* Styles des titres */
+.tiptap h1, .tiptap h2, .tiptap h3, .tiptap h4, .tiptap h5 {
+    margin: 0 !important;
+    padding: 0 !important;
+    margin-bottom: 0.75em !important;
+}
+
+.tiptap h1 {
+    font-size: 32px !important;
+}
+
+.tiptap h2 {
+    font-size: 27px !important;
+}
+
+.tiptap h3 {
+    font-size: 24px !important;
+}
+
+.tiptap h4 {
+    font-size: 22px !important;
+}
+
+.tiptap h5 {
+    font-size: 20px !important;
+}
+
+.tiptap p {
+    font-size: 16px !important;
+}
+
+/* Styles des listes */
+.tiptap ul[data-type="bulletList"] {
+    list-style-type: disc !important;
+}
+
+.tiptap ul[data-type="dashList"] {
+    list-style-type: "-" !important;
 }
 
 /* Pour s'assurer que les marges sont appliquées même en mode impression */

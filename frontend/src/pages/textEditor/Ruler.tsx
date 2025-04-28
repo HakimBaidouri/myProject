@@ -8,8 +8,8 @@ interface RulerProps {
 }
 
 export const Ruler = ({ onMarginsChange }: RulerProps) => {
-  const [leftMargin, setLeftMargin] = useState(56);
-  const [rightMargin, setRightMargin] = useState(56);
+  const [leftMargin, setLeftMargin] = useState(75);
+  const [rightMargin, setRightMargin] = useState(75);
 
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
@@ -53,13 +53,13 @@ export const Ruler = ({ onMarginsChange }: RulerProps) => {
   };
 
   const handleLeftDoubleClick = () => {
-    setLeftMargin(56);
-    onMarginsChange?.(56, rightMargin);
+    setLeftMargin(75);
+    onMarginsChange?.(75, rightMargin);
   };
   
   const handleRightDoubleClick = () => {
-    setRightMargin(56);
-    onMarginsChange?.(leftMargin, 56);
+    setRightMargin(75);
+    onMarginsChange?.(leftMargin, 75);
   };
   
 

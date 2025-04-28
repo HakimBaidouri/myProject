@@ -47,9 +47,8 @@ export default function ChapterEditor({
   disablePrint = false
 }: ChapterEditorProps) {
   const { setEditor } = useEditorStore();
-  const [activeTab, setActiveTab] = useState<'tableur' | 'notes'>('tableur');
-  const [leftMargin, setLeftMargin] = useState(56);
-  const [rightMargin, setRightMargin] = useState(56);
+  const [leftMargin, setLeftMargin] = useState(75);
+  const [rightMargin, setRightMargin] = useState(75);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -112,74 +111,61 @@ export default function ChapterEditor({
       }),
       TaskList,
     ],
-    content: chapterNotes[tableKey] || '',
+    content: chapterNotes[tableKey] || `
+      <h4>DESCRIPTION</h4>
+      <h5>- Définition / Comprend</h5>
+      <h5>- Remarques importantes</h5>
+      <h4>MATÉRIAUX</h4>
+      <h4>EXÉCUTION / MISE EN ŒUVRE</h4>
+      <h4>CONTRÔLE</h4>
+      <h4>DOCUMENTS DE RÉFÉRENCE</h4>
+      <h5>- Matériau</h5>
+      <h5>- Exécution</h5>
+      <h4>PRÉSCRIPTION SPÉCIALES</h4>
+      <h5>- Divers</h5>
+      <h4>AIDE</h4>
+      <h4>A CLASSER</h4>
+      <h4>MESURAGE</h4>
+    `,
   })
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-        <button
-          onClick={() => setActiveTab('tableur')}
-          style={{ fontWeight: activeTab === 'tableur' ? 'bold' : 'normal' }}
-        >
-          📊 Tableur
-        </button>
-        <button
-          onClick={() => setActiveTab('notes')}
-          style={{ fontWeight: activeTab === 'notes' ? 'bold' : 'normal' }}
-        >
-          📄 Cahier des charges
-        </button>
-      </div>
-
-      {activeTab === 'tableur' ? (
-        <MetreTable
-          key={tableKey}
-          tableKey={tableKey}
-          data={tableData}
-          onDataChange={onTableChange}
-          detailDataMap={detailDataMap}
-          setDetailDataMap={setDetailDataMap}
-        />
-      ) : (
-        <div className={`min-h-screen bg-[#FAFBFD] ${disablePrint ? 'print:hidden' : 'print:bg-white'}`}>
-          <div className="print:hidden">
-            <Toolbar disablePrint={disablePrint} />
-          </div>
-          <div className='size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible'>
-            {!disablePrint && (
-              <div className="print:hidden pb-4">
-                <Ruler
-                  onMarginsChange={(left, right) => {
-                    setLeftMargin(left);
-                    setRightMargin(right);
-                    const style = document.createElement('style');
-                    style.textContent = `
-                      [data-page-body="true"] {
-                        padding: 0px ${right}px 0px ${left}px !important;
-                      }
-                      @media print {
-                        [data-page-body="true"] {
-                          padding: 0px ${right}px 0px ${left}px !important;
-                        }
-                      }
-                    `;
-                    const oldStyle = document.getElementById('dynamic-margins');
-                    if (oldStyle) {
-                      oldStyle.remove();
+      <div className={`min-h-screen bg-[#FAFBFD] ${disablePrint ? 'print:hidden' : 'print:bg-white'}`}>
+        <div className="print:hidden">
+          <Toolbar disablePrint={disablePrint} />
+        </div>
+        <div className='size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible'>
+          <div className="print:hidden pb-4">
+            <Ruler
+              onMarginsChange={(left, right) => {
+                setLeftMargin(left);
+                setRightMargin(right);
+                const style = document.createElement('style');
+                style.textContent = `
+                  [data-page-body="true"] {
+                    padding: 40px ${right}px 0px ${left}px !important;
+                  }
+                  @media print {
+                    [data-page-body="true"] {
+                      padding: 40px ${right}px 0px ${left}px !important;
                     }
-                    style.id = 'dynamic-margins';
-                    document.head.appendChild(style);
-                  }}
-                />
-              </div>
-            )}
-            <div className='min-w-max flex justify-center w-[816px] print:py-0 mx-auto print:w-full print:min-w-0'>
-              <EditorContent editor={editor}/>
-            </div>
+                  }
+                `;
+                const oldStyle = document.getElementById('dynamic-margins');
+                if (oldStyle) {
+                  oldStyle.remove();
+                }
+                style.id = 'dynamic-margins';
+                document.head.appendChild(style);
+              }}
+            />
+          </div>
+          <div className='min-w-max flex justify-center w-[816px] print:py-0 mx-auto print:w-full print:min-w-0'>
+            <EditorContent editor={editor}/>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
