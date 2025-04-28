@@ -192,11 +192,6 @@ export default function ChapterEditor({
         <div className='min-w-max flex justify-center w-[816px] py-4 print:py-0 mx-auto print:w-full print:min-w-0'>
           <EditorContent editor={editor}/>
         </div>
-        {lastSaved && (
-          <div className="print:hidden text-xs text-gray-500 text-center mt-2">
-            Dernière sauvegarde: {lastSaved.toLocaleTimeString()}
-          </div>
-        )}
       </div>
       <style>
         {`
