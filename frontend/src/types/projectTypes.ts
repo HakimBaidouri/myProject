@@ -42,6 +42,7 @@ export interface Chapter {
     parentId: number | null;
     num: string;
     label: string;
+    content?: string; // Contenu HTML de l'éditeur
 }
 
 // Wrapper from DTO backend

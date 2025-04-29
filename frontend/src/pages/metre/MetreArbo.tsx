@@ -70,9 +70,15 @@ export default function MetreArbo() {
     // 2. Tables
     const tables: Record<string, any[][]> = {};
     const details: Record<string, any[][]> = {};
+    const chapterTexts: Record<string, string> = {}; // Pour stocker le contenu HTML
 
     data.chapters.forEach(({ chapter, lines }) => {
       const chapterId = chapter.id.toString();
+      
+      // Récupération du contenu HTML du chapitre s'il existe
+      if (chapter.content) {
+        chapterTexts[chapterId] = chapter.content;
+      }
 
       const mainLines = lines.map(({ mainTableLine, details: lineDetails }) => {
         const prix = mainTableLine.quantity * mainTableLine.unitPrice;
@@ -110,6 +116,7 @@ export default function MetreArbo() {
 
     setTableDataMap(tables);
     setDetailDataMap(details);
+    setChapterTextMap(chapterTexts); // Mettre à jour le state avec les contenus des chapitres
   }, [data]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -307,7 +314,8 @@ export default function MetreArbo() {
           parentTempId: isNew && parentNode ? parentNode.key : null,
           num: node.num,
           label: node.label,
-          projectId: data.project.id
+          projectId: data.project.id,
+          content: chapterTextMap[node.key] || ''
         };
     
         const children = node.children ? flattenChapters(node.children, node) : [];

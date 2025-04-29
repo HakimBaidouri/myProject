@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, memo } from "react";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/store/use-editor-store";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import TextAlign from "@tiptap/extension-text-align";
 
-const LineHeightButton = () => {
+const LineHeightButton = memo(() => {
     const { editor } = useEditorStore();
 
     const lineHeights = [
@@ -65,17 +65,47 @@ const LineHeightButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
 const FontSizeButton = () => {
     const { editor } = useEditorStore();
 
-    const currentFontSize = editor?.getAttributes("textStyle").fontSize
-        ? editor?.getAttributes("textStyle").fontSize.replace("px", "") : "16";
+    // Correspondance entre les niveaux de titre et les tailles de police
+    const headingSizes = {
+        1: "32",
+        2: "27",
+        3: "24",
+        4: "22",
+        5: "20"
+    };
+
+    // Obtenir la taille de police actuelle, en tenant compte des titres
+    const getCurrentFontSize = () => {
+        // Vérifier d'abord si un titre est actif
+        for (let level = 1; level <= 5; level++) {
+            if (editor?.isActive("heading", { level })) {
+                return headingSizes[level as keyof typeof headingSizes];
+            }
+        }
+        
+        // Sinon, utiliser la taille définie dans textStyle
+        return editor?.getAttributes("textStyle").fontSize
+            ? editor?.getAttributes("textStyle").fontSize.replace("px", "") 
+            : "16";
+    };
+
+    const currentFontSize = getCurrentFontSize();
 
     const [fontSize, setFontSize] = useState(currentFontSize);
     const [inputValue, setInputValue] = useState(fontSize);
     const [isEditing, setIsEditing] = useState(false);
+
+    // Mettre à jour l'état local quand la sélection change
+    useEffect(() => {
+        const newSize = getCurrentFontSize();
+        setFontSize(newSize);
+        setInputValue(newSize);
+    }, [editor?.state.selection]);
 
     const updateFontSize = (newSize: string) => {
         const size = parseInt(newSize);
@@ -136,11 +166,14 @@ const FontSizeButton = () => {
                 <button
                     onClick={() => {
                         setIsEditing(true);
-                        setFontSize(currentFontSize);
+                        // Obtenir la taille la plus récente
+                        const currentSize = getCurrentFontSize();
+                        setFontSize(currentSize);
+                        setInputValue(currentSize);
                     }}
                     className="h-7 w-10 text-sm text-center border border-neutral-400 rounded-sm bg-transparent cursor-text"
                 >
-                    {currentFontSize}
+                    {fontSize}
                 </button>
             )}
             <button 
@@ -153,7 +186,7 @@ const FontSizeButton = () => {
     )
 }
 
-const ListButton = () => {
+const ListButton = memo(() => {
     const { editor } = useEditorStore();
 
     const lists = [
@@ -201,9 +234,9 @@ const ListButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
-const AlignButton = () => {
+const AlignButton = memo(() => {
     const { editor } = useEditorStore();
 
     const alignments = [
@@ -259,9 +292,9 @@ const AlignButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
-const ImageButton = () => {
+const ImageButton = memo(() => {
     const { editor } = useEditorStore();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [imageUrl, setImageUrl] = useState("");
@@ -340,9 +373,9 @@ const ImageButton = () => {
             </Dialog>
         </>
     )
-}
+});
 
-const LinkButton = () => {
+const LinkButton = memo(() => {
     const { editor } = useEditorStore();
     const [value, setValue] = useState(editor?.getAttributes("link").href || "");
 
@@ -376,9 +409,9 @@ const LinkButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
-const HighlightColorButton = () => {
+const HighlightColorButton = memo(() => {
     const { editor } = useEditorStore();
 
     const value = editor?.getAttributes("highlight").color || "#FFFFFF";
@@ -404,9 +437,9 @@ const HighlightColorButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
-const TextColorButton = () => {
+const TextColorButton = memo(() => {
     const { editor } = useEditorStore();
 
     const value = editor?.getAttributes("textStyle").color || "#000000";
@@ -433,9 +466,9 @@ const TextColorButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
-const HeadingButton = () => {
+const HeadingButton = memo(() => {
     const { editor } = useEditorStore();
 
     const headings = [
@@ -492,50 +525,54 @@ const HeadingButton = () => {
             </DropdownMenuContent>
         </DropdownMenu>
     )
-}
+});
 
-const FontFamilyButton = () => {
+const FontFamilyButton = memo(() => {
     const { editor } = useEditorStore();
 
     const fonts = [
-        { label: "Arial", value: "Arial"},
-        { label: "Times New Roman", value: "Times New Roman"},
-        { label: "Courier New", value: "Courier New"},
-        { label: "Georgia ", value: "Georgia"},
-        { label: "Verdana", value: "Verdana"},
-        { label: "Calibri", value: "Calibri"},
+        { label: "Arial", value: "Arial" },
+        { label: "Times New Roman", value: "Times New Roman" },
+        { label: "Courier New", value: "Courier New" },
+        { label: "Georgia", value: "Georgia" },
+        { label: "Verdana", value: "Verdana" },
+        { label: "Calibri", value: "Calibri" },
     ];
 
-    return(
+    const getCurrentFont = () => {
+        const fontFamily = editor?.getAttributes("textStyle")?.fontFamily;
+        return fontFamily || "Arial";
+    };
+
+    return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button
-                    className="h-7 w-[120px] shrink-0 flex items-center justify-between rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm"
-                >
-                    <span className="truncate">
-                        {editor?.getAttributes("textStyle").fontFamily || "Arial"}
-                    </span>
-                    <ChevronDown className="ml-2 size-4 shrink-0"/>
+                <button className="h-7 w-[120px] shrink-0 flex items-center justify-between rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+                    <span className="truncate">{getCurrentFont()}</span>
+                    <ChevronDown className="ml-2 size-4 shrink-0" />
                 </button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent className="p-1 flex flex-col gap-y-1">
                 {fonts.map((font) => (
                     <button
                         key={font.value}
                         className={cn(
                             "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
-                            editor?.getAttributes("textStyle").fontFamily === font.value && "bg-neutral-200/80"
+                            getCurrentFont() === font.value && "bg-neutral-200/80"
                         )}
                         style={{ fontFamily: font.value }}
-                        onClick={() => editor?.chain().focus().setFontFamily(font.value).run()}
+                        onClick={() => {
+                            editor?.chain().focus().setFontFamily(font.value).run();
+                        }}
                     >
                         <span className="text-sm">{font.label}</span>
                     </button>
                 ))}
             </DropdownMenuContent>
         </DropdownMenu>
-    )
-}
+    );
+});
 
 interface ToolbarButtonProps{
     onClick? : () => void;

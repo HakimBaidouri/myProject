@@ -57,13 +57,6 @@ export default function ChapterEditor({
     lastSaved 
   } = useChapterStorage(chapterNotes);
   
-  // Sauvegarder automatiquement les modifications
-  useEffect(() => {
-    if (chapterNotes[tableKey]) {
-      saveChapter(tableKey, chapterNotes[tableKey]);
-    }
-  }, [chapterNotes, tableKey, saveChapter]);
-
   // Fonction pour charger un chapitre
   const handleLoadChapter = (key: string, content: string) => {
     setChapterNotes(prev => ({ ...prev, [key]: content }));
@@ -81,6 +74,7 @@ export default function ChapterEditor({
       setEditor(editor);
       const content = editor.getHTML();
       setChapterNotes(prev => ({ ...prev, [tableKey]: content }));
+      saveChapter(tableKey, content);
     },
     onSelectionUpdate({ editor }) {
       setEditor(editor);
