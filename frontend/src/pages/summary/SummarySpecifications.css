@@ -1,0 +1,72 @@
+.specifications-summary {
+  width: 100%;
+}
+
+.specifications-container {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.chapter-container {
+  page-break-inside: avoid;
+}
+
+.chapter-content {
+  line-height: 1.6;
+}
+
+.chapter-content h1, 
+.chapter-content h2, 
+.chapter-content h3, 
+.chapter-content h4, 
+.chapter-content h5 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.chapter-content h4 {
+  font-size: 1.2rem;
+  color: #333;
+  border-bottom: 1px solid #eaeaea;
+  padding-bottom: 0.5rem;
+}
+
+.chapter-content h5 {
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.chapter-content p {
+  margin-bottom: 0.75rem;
+}
+
+.chapter-content ul, 
+.chapter-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.chapter-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+}
+
+/* Styles d'impression */
+@media print {
+  .specifications-container {
+    box-shadow: none;
+    padding: 0;
+  }
+  
+  .chapter-container {
+    break-inside: avoid;
+  }
+  
+  hr {
+    display: none;
+  }
+} 
