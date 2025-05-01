@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import SummarySpreadsheet from './summary/SummarySpreadsheet';
-import SummarySpecifications from './summary/SummarySpecifications';
+import SummarySpreadsheet from '@/pages/summary/SummarySpreadsheet';
+import SummarySpecifications from '@/pages/summary/SummarySpecifications';
 
 export default function Summary() {
   const [activeTab, setActiveTab] = useState('spreadsheet');
