@@ -1,25 +1,42 @@
 import { useState, useEffect } from 'react';
 import './SummarySpecifications.css';
-import { useProjectLoader } from '@/hooks/useProjectLoader';
-import { Chapter, ChapterWithLines } from '@/types/projectTypes';
+import { useLocalStorageData, TreeNodeData } from '../../hooks/useLocalStorageData';
+
+// Type simplifié compatible avec localStorage
+interface Chapter {
+  id: string;
+  num: string;
+  label: string;
+  parentId: string | null;
+  content: string;
+}
 
 export default function SummarySpecifications() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  // Temporairement, utiliser un ID de projet fixe
-  // Dans une implémentation complète, cela viendrait d'un paramètre d'URL ou d'un état global
-  const projectId = 1;
-  const { data, loading, error } = useProjectLoader(projectId);
+  const { treeData, chapterTextMap, loading } = useLocalStorageData();
+  
+  console.log("🚀 SummarySpecifications: Payload reçu depuis localStorage:", {
+    treeData,
+    chapterTextMap
+  });
 
   useEffect(() => {
-    if (data) {
-      processChapters(data.chapters);
+    if (!loading && treeData.length > 0) {
+      processLocalStorageData();
     }
-  }, [data]);
+  }, [loading, treeData, chapterTextMap]);
 
-  const processChapters = (chaptersData: ChapterWithLines[]) => {
-    // Extraire les chapitres avec leur contenu HTML
-    const extractedChapters: Chapter[] = chaptersData.map(chapterData => ({
-      ...chapterData.chapter
+  const processLocalStorageData = () => {
+    // Convertir les données du localStorage au format attendu par le composant
+    const flatNodes = flattenTreeNodes(treeData);
+    
+    // Créer des objets chapitre avec leur contenu
+    const extractedChapters: Chapter[] = flatNodes.map(node => ({
+      id: node.key,
+      num: node.num,
+      label: node.label,
+      parentId: node.parentId || null,
+      content: chapterTextMap[node.key] || ''
     }));
 
     // Trier les chapitres
@@ -27,39 +44,36 @@ export default function SummarySpecifications() {
     setChapters(sortedChapters);
   };
 
-  // Fonction pour trier les chapitres hiérarchiquement
-  const sortChapters = (chapters: Chapter[]): Chapter[] => {
-    // Aplatir la hiérarchie des chapitres
-    const flatChapters = flattenChapters(chapters);
+  // Fonction pour aplatir l'arborescence en liste
+  const flattenTreeNodes = (nodes: TreeNodeData[]): TreeNodeData[] => {
+    let result: TreeNodeData[] = [];
     
-    // Trier les chapitres par leur numéro
-    flatChapters.sort((a, b) => {
-      return a.num.localeCompare(b.num, undefined, { numeric: true });
+    nodes.forEach(node => {
+      result.push(node);
+      if (node.children && node.children.length > 0) {
+        result = [...result, ...flattenTreeNodes(node.children)];
+      }
     });
-    
-    return flatChapters;
-  };
-
-  // Fonction récursive pour aplatir la structure des chapitres
-  const flattenChapters = (chapters: Chapter[], parentId: number | null = null): Chapter[] => {
-    const result: Chapter[] = [];
-    
-    chapters
-      .filter(ch => ch.parentId === parentId)
-      .forEach(chapter => {
-        result.push(chapter);
-        result.push(...flattenChapters(chapters, chapter.id));
-      });
     
     return result;
   };
 
+  // Fonction pour trier les chapitres hiérarchiquement
+  const sortChapters = (chapters: Chapter[]): Chapter[] => {
+    // Trier les chapitres par leur numéro
+    chapters.sort((a, b) => {
+      return a.num.localeCompare(b.num, undefined, { numeric: true });
+    });
+    
+    return chapters;
+  };
+
   if (loading) {
-    return <div className="text-center py-8">Loading data...</div>;
+    return <div className="text-center py-8">Chargement des données...</div>;
   }
 
-  if (error) {
-    return <div className="text-center py-8 text-red-500">{error}</div>;
+  if (treeData.length === 0) {
+    return <div className="text-center py-8 text-red-500">Aucune donnée disponible. Veuillez d'abord compléter les données dans la section Métré.</div>;
   }
 
   return (

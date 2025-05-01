@@ -1,0 +1,50 @@
+.summary-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.summary-table {
+  margin-top: 20px;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.summary-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.summary-table th, 
+.summary-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.summary-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.summary-table .price {
+  text-align: right;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.summary-table .total-row {
+  font-weight: bold;
+  background-color: #f1f8ff;
+}
+
+.loading,
+.no-data {
+  padding: 100px 20px;
+  text-align: center;
+  font-size: 18px;
+  color: #666;
+} 
