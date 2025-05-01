@@ -10,6 +10,9 @@ import MetreDetailTable from './MetreDetailTable';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
+// Clés pour le stockage localStorage des tables individuelles
+const METRE_TABLE_KEY_PREFIX = 'metreTable_';
+
 interface MetreTableProps {
   tableKey: string;
   data: any[][];
@@ -22,6 +25,25 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
   const hotRef = useRef<HotTableClass | null>(null);
   const [localData, setLocalData] = useState<any[][]>([...data]);
   const [openDetails, setOpenDetails] = useState<string[]>([]);
+
+  // Charger les détails ouverts depuis localStorage
+  useEffect(() => {
+    try {
+      const savedDetails = localStorage.getItem(`${METRE_TABLE_KEY_PREFIX}openDetails_${tableKey}`);
+      if (savedDetails) {
+        setOpenDetails(JSON.parse(savedDetails));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails ouverts:', error);
+    }
+  }, [tableKey]);
+
+  // Sauvegarder les détails ouverts dans localStorage
+  useEffect(() => {
+    if (openDetails.length > 0) {
+      localStorage.setItem(`${METRE_TABLE_KEY_PREFIX}openDetails_${tableKey}`, JSON.stringify(openDetails));
+    }
+  }, [openDetails, tableKey]);
 
   useEffect(() => {
     const updated = [...data.map(row => [...row])];
@@ -57,6 +79,10 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
       const newRow = ['', '', '', '', '', 0, 0, 0, ''];
       const updated = [...copy, newRow, total];
       onDataChange(updated);
+      
+      // Sauvegarde directe dans localStorage pour cette table spécifique
+      localStorage.setItem(`${METRE_TABLE_KEY_PREFIX}${tableKey}`, JSON.stringify(updated));
+      
       return updated;
     });
   };
@@ -86,22 +112,30 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
   ) => {
     if (!changes || source === 'loadData') return;
 
+    console.log("Modification détectée dans MetreTable:", changes);
+
     const newData = [...localData.map(row => [...row])];
     const totalRowIndex = newData.length - 1;
 
-    changes.forEach(([row, col, , newValue]) => {
+    changes.forEach(([row, col, oldValue, newValue]) => {
+      console.log(`Cellule modifiée: [${row}, ${col}] de ${oldValue} à ${newValue}`);
       newData[row][col as number] = newValue;
 
       if (col === 5 || col === 6) {
+        // S'assurer que nous traitons avec des nombres
         const qte = parseFloat(newData[row][5]) || 0;
         const pu = parseFloat(newData[row][6]) || 0;
         newData[row][7] = qte * pu;
+        console.log(`Prix total recalculé: ${newData[row][7]}`);
       }
     });
 
     updateTotalRow(newData);
     setLocalData(newData);
     onDataChange(newData);
+    
+    // Sauvegarde directe dans localStorage pour cette table spécifique
+    localStorage.setItem(`${METRE_TABLE_KEY_PREFIX}${tableKey}`, JSON.stringify(newData));
   };
 
   const actionRenderer = (instance: any, td: HTMLElement, row: number) => {
@@ -132,6 +166,9 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
       });
 
       setOpenDetails(prev => prev.filter(i => i !== detailKey));
+      
+      // Sauvegarde directe dans localStorage pour cette table spécifique après suppression
+      localStorage.setItem(`${METRE_TABLE_KEY_PREFIX}${tableKey}`, JSON.stringify(newData));
     };
 
     const detailBtn = document.createElement('button');
@@ -214,6 +251,10 @@ export default function MetreTable({ tableKey, data, onDataChange, detailDataMap
               onDataChange={(updatedDetail) => {
                 setDetailDataMap(prev => ({ ...prev, [detailKey]: updatedDetail }));
                 handleDetailChange(intitule, updatedDetail.at(-1)?.[6] ?? 0);
+                
+                // Sauvegarder les détails modifiés
+                const updatedDetails = {...detailDataMap, [detailKey]: updatedDetail};
+                localStorage.setItem(`metreDetailData`, JSON.stringify(updatedDetails));
               }}
             />
           </div>

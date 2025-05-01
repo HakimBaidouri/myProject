@@ -12,6 +12,16 @@ import ChapterEditor from '../textEditor/ChapterEditor';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
+// Clés pour le stockage localStorage
+const STORAGE_KEYS = {
+  TABLE_DATA: 'metreTableData',
+  DETAIL_DATA: 'metreDetailData',
+  CHAPTER_TEXT: 'metreChapterText',
+  TREE_DATA: 'metreTreeData',
+  SELECTED_KEY: 'metreSelectedKey',
+  ACTIVE_TAB: 'metreActiveTab'
+};
+
 interface TreeNodeData {
   key: string;
   num: string;
@@ -29,7 +39,102 @@ export default function MetreArbo() {
   const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>({});
   const [activeTab, setActiveTab] = useState<'table' | 'doc'>('table');
   const [chapterTextMap, setChapterTextMap] = useState<Record<string, string>>({});
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [clickCountMap, setClickCountMap] = useState<Record<string, number>>({});
 
+  // Mise à jour du localStorage lorsque les données changent
+  useEffect(() => {
+    if (Object.keys(tableDataMap).length > 0) {
+      localStorage.setItem(STORAGE_KEYS.TABLE_DATA, JSON.stringify(tableDataMap));
+      console.log('Données des tableaux sauvegardées dans localStorage');
+    }
+  }, [tableDataMap]);
+
+  useEffect(() => {
+    if (Object.keys(detailDataMap).length > 0) {
+      localStorage.setItem(STORAGE_KEYS.DETAIL_DATA, JSON.stringify(detailDataMap));
+      console.log('Données de détails sauvegardées dans localStorage');
+    }
+  }, [detailDataMap]);
+
+  useEffect(() => {
+    if (Object.keys(chapterTextMap).length > 0) {
+      localStorage.setItem(STORAGE_KEYS.CHAPTER_TEXT, JSON.stringify(chapterTextMap));
+      console.log('Textes des chapitres sauvegardés dans localStorage');
+    }
+  }, [chapterTextMap]);
+
+  // Sauvegarder l'arborescence modifiée dans localStorage
+  useEffect(() => {
+    if (treeData.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.TREE_DATA, JSON.stringify(treeData));
+      console.log('Arborescence sauvegardée dans localStorage');
+    }
+  }, [treeData]);
+
+  // Sauvegarder la sélection courante dans localStorage
+  useEffect(() => {
+    if (selectedKey) {
+      localStorage.setItem(STORAGE_KEYS.SELECTED_KEY, selectedKey);
+      console.log('Sélection sauvegardée dans localStorage:', selectedKey);
+    }
+  }, [selectedKey]);
+
+  // Sauvegarder l'onglet actif dans localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, activeTab);
+    console.log('Onglet actif sauvegardé dans localStorage:', activeTab);
+  }, [activeTab]);
+
+  // Chargement des données depuis localStorage si elles existent
+  useEffect(() => {
+    const loadDataFromLocalStorage = () => {
+      try {
+        const savedTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
+        const savedDetailData = localStorage.getItem(STORAGE_KEYS.DETAIL_DATA);
+        const savedChapterText = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
+        const savedTreeData = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
+        const savedSelectedKey = localStorage.getItem(STORAGE_KEYS.SELECTED_KEY);
+        const savedActiveTab = localStorage.getItem(STORAGE_KEYS.ACTIVE_TAB);
+
+        if (savedTableData) {
+          setTableDataMap(JSON.parse(savedTableData));
+          console.log('Données des tableaux chargées depuis localStorage');
+        }
+
+        if (savedDetailData) {
+          setDetailDataMap(JSON.parse(savedDetailData));
+          console.log('Données de détails chargées depuis localStorage');
+        }
+
+        if (savedChapterText) {
+          setChapterTextMap(JSON.parse(savedChapterText));
+          console.log('Textes des chapitres chargés depuis localStorage');
+        }
+
+        if (savedTreeData) {
+          setTreeData(JSON.parse(savedTreeData));
+          console.log('Arborescence chargée depuis localStorage');
+        }
+
+        if (savedSelectedKey) {
+          setSelectedKey(savedSelectedKey);
+          console.log('Sélection chargée depuis localStorage:', savedSelectedKey);
+        }
+
+        if (savedActiveTab && (savedActiveTab === 'table' || savedActiveTab === 'doc')) {
+          setActiveTab(savedActiveTab as 'table' | 'doc');
+          console.log('Onglet actif chargé depuis localStorage:', savedActiveTab);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données depuis localStorage:', error);
+      }
+    };
+
+    // Charger les données depuis localStorage
+    loadDataFromLocalStorage();
+  }, []);
 
   // Reconstruction de l'arborescence imbriquée depuis un tableau plat
   function buildTreeFromFlatData(flat: TreeNodeData[]): TreeNodeData[] {
@@ -64,10 +169,30 @@ export default function MetreArbo() {
       parentId: chapter.parentId ? chapter.parentId.toString() : null
     }));
 
-    const tree = buildTreeFromFlatData(flatChapters);
-    setTreeData(tree);
+    // Construire l'arborescence à partir des données de l'API
+    const apiTreeData = buildTreeFromFlatData(flatChapters);
+    
+    // Vérifier si on a déjà une arborescence dans le localStorage
+    const savedTreeData = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
+    
+    if (savedTreeData) {
+      try {
+        // Utiliser l'arborescence sauvegardée si elle existe
+        const parsedTreeData = JSON.parse(savedTreeData);
+        console.log('Utilisation de l\'arborescence sauvegardée');
+        // Mettre à jour l'arborescence avec celle sauvegardée
+        setTreeData(parsedTreeData);
+      } catch (error) {
+        console.error('Erreur lors du parsing de l\'arborescence sauvegardée:', error);
+        // En cas d'erreur, utiliser l'arborescence de l'API
+        setTreeData(apiTreeData);
+      }
+    } else {
+      // Aucune arborescence sauvegardée, utiliser celle de l'API
+      setTreeData(apiTreeData);
+    }
 
-    // 2. Tables
+    // 2. Préparer les tables à partir des données de l'API
     const tables: Record<string, any[][]> = {};
     const details: Record<string, any[][]> = {};
     const chapterTexts: Record<string, string> = {}; // Pour stocker le contenu HTML
@@ -114,14 +239,59 @@ export default function MetreArbo() {
       tables[chapterId] = [...mainLines, ['Total', '', '', '', '', '', '', 0, '']];
     });
 
-    setTableDataMap(tables);
-    setDetailDataMap(details);
-    setChapterTextMap(chapterTexts); // Mettre à jour le state avec les contenus des chapitres
-  }, [data]);
+    // 3. Fusionner les données de l'API avec celles du localStorage
+    try {
+      const savedTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
+      const savedDetailData = localStorage.getItem(STORAGE_KEYS.DETAIL_DATA);
+      const savedChapterText = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
 
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [clickCountMap, setClickCountMap] = useState<Record<string, number>>({});
+      // Utiliser les données de localStorage si elles existent, sinon celles de l'API
+      if (savedTableData) {
+        const parsedTableData = JSON.parse(savedTableData);
+        // Fusionner en prioritisant les données de localStorage
+        Object.keys(tables).forEach(key => {
+          if (!parsedTableData[key]) {
+            parsedTableData[key] = tables[key];
+          }
+        });
+        setTableDataMap(parsedTableData);
+      } else {
+        setTableDataMap(tables);
+      }
+
+      if (savedDetailData) {
+        const parsedDetailData = JSON.parse(savedDetailData);
+        // Fusionner en prioritisant les données de localStorage
+        Object.keys(details).forEach(key => {
+          if (!parsedDetailData[key]) {
+            parsedDetailData[key] = details[key];
+          }
+        });
+        setDetailDataMap(parsedDetailData);
+      } else {
+        setDetailDataMap(details);
+      }
+
+      if (savedChapterText) {
+        const parsedChapterText = JSON.parse(savedChapterText);
+        // Fusionner en prioritisant les données de localStorage
+        Object.keys(chapterTexts).forEach(key => {
+          if (!parsedChapterText[key]) {
+            parsedChapterText[key] = chapterTexts[key];
+          }
+        });
+        setChapterTextMap(parsedChapterText);
+      } else {
+        setChapterTextMap(chapterTexts);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la fusion des données:', error);
+      // En cas d'erreur, utiliser les données de l'API
+      setTableDataMap(tables);
+      setDetailDataMap(details);
+      setChapterTextMap(chapterTexts);
+    }
+  }, [data]);
 
   const getOrCreateTableData = (key: string): any[][] => {
     if (!tableDataMap[key]) {
@@ -398,6 +568,13 @@ export default function MetreArbo() {
   
       if (res.ok) {
         alert('Projet enregistré avec succès !');
+        // Après sauvegarde réussie, mettre à jour localStorage avec les données actuelles
+        localStorage.setItem(STORAGE_KEYS.TABLE_DATA, JSON.stringify(tableDataMap));
+        localStorage.setItem(STORAGE_KEYS.DETAIL_DATA, JSON.stringify(detailDataMap));
+        localStorage.setItem(STORAGE_KEYS.CHAPTER_TEXT, JSON.stringify(chapterTextMap));
+        localStorage.setItem(STORAGE_KEYS.TREE_DATA, JSON.stringify(treeData));
+        localStorage.setItem(STORAGE_KEYS.SELECTED_KEY, selectedKey || '');
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, activeTab);
       } else {
         alert(`Erreur à l'enregistrement (HTTP ${res.status})`);
       }
