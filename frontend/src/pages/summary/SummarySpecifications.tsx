@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './SummarySpecifications.css';
-import { useLocalStorageData, TreeNodeData } from '../../hooks/useLocalStorageData';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useLocalStorageData, TreeNodeData, STORAGE_KEYS } from '../../hooks/useLocalStorageData';
+import { useEditor, EditorContent, Extension } from '@tiptap/react';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import Table from '@tiptap/extension-table';
@@ -34,6 +34,80 @@ interface Chapter {
   parentId: string | null;
   content: string;
 }
+
+// Extension pour empêcher la suppression des titres de chapitres
+const ProtectHeadings = Extension.create({
+  name: 'protectHeadings',
+  
+  addKeyboardShortcuts() {
+    return {
+      // Empêcher la suppression des numéros de chapitres
+      Backspace: ({ editor }) => {
+        // Ne pas interférer avec les commandes d'historique (undo)
+        if (editor.view.state.selection.$head.pos === 0) {
+          return false;
+        }
+        
+        const { selection } = editor.state;
+        const { empty, $head } = selection;
+        
+        // Vérifier si on se trouve dans un titre h1 ou h2
+        if (empty && $head.parent.type.name === 'heading' && 
+            ($head.parent.attrs.level === 1 || $head.parent.attrs.level === 2)) {
+          
+          const nodeText = $head.parent.textContent;
+          // Vérifier si le texte contient un numéro de chapitre (format: "X.Y - Titre")
+          const match = nodeText.match(/^([\d\.]+)\s*-\s*/);
+          
+          if (match) {
+            const numPart = match[0]; // La partie "X.Y - "
+            const numPartLength = numPart.length;
+            
+            // Si le curseur est dans la partie numéro, empêcher la suppression
+            if ($head.parentOffset <= numPartLength) {
+              return true; // Empêcher l'action par défaut
+            }
+          }
+        }
+        
+        return false; // Laisser passer les autres cas
+      },
+      
+      // Empêcher la suppression des numéros avec Delete
+      Delete: ({ editor }) => {
+        const { selection } = editor.state;
+        const { empty, $head } = selection;
+        
+        // Vérifier si on se trouve dans un titre h1 ou h2
+        if (empty && $head.parent.type.name === 'heading' && 
+            ($head.parent.attrs.level === 1 || $head.parent.attrs.level === 2)) {
+          
+          const nodeText = $head.parent.textContent;
+          // Vérifier si le texte contient un numéro de chapitre
+          const match = nodeText.match(/^([\d\.]+)\s*-\s*/);
+          
+          if (match) {
+            const numPart = match[0]; // La partie "X.Y - "
+            const numPartLength = numPart.length;
+            
+            // Si le curseur est juste avant la partie numéro ou dans celle-ci
+            // et qu'une suppression pourrait affecter le numéro
+            if ($head.parentOffset < numPartLength) {
+              return true; // Empêcher l'action par défaut
+            }
+          }
+        }
+        
+        return false; // Laisser passer les autres cas
+      },
+      
+      // Permettre explicitement les raccourcis undo et redo
+      'Mod-z': () => false, // Permet à l'événement de continuer son traitement normal
+      'Mod-y': () => false, // Permet à l'événement de continuer son traitement normal
+      'Mod-Shift-z': () => false, // Alternative pour Redo sur certains systèmes
+    };
+  }
+});
 
 // Composant pour le bouton d'export Word
 function ExportButtons() {
@@ -175,23 +249,188 @@ export default function SummarySpecifications() {
   const editorRef = useRef<HTMLDivElement>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [combinedContent, setCombinedContent] = useState<string>('');
-  const { treeData, chapterTextMap, loading } = useLocalStorageData();
+  const [lastUpdateCheck, setLastUpdateCheck] = useState<number>(Date.now());
+  const { treeData, chapterTextMap, loading, updateNode, updateChapterText, updateChapterTextMap } = useLocalStorageData();
   const { setEditor } = useEditorStore();
+  const editorUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const contentUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const forceUpdateRef = useRef<boolean>(false);
+  
+  // Fonction pour forcer le rechargement depuis localStorage
+  const forceReloadFromLocalStorage = useCallback(() => {
+    try {
+      console.log("Forçage du rechargement des données depuis localStorage");
+      
+      const treeDataFromStorage = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
+      const chapterTextFromStorage = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
+      
+      if (treeDataFromStorage && chapterTextFromStorage) {
+        const parsedTreeData = JSON.parse(treeDataFromStorage);
+        const parsedChapterText = JSON.parse(chapterTextFromStorage);
+        
+        // Marquer que nous forçons une mise à jour
+        forceUpdateRef.current = true;
+        
+        // Traiter les données chargées
+        const flatNodes = flattenTreeNodes(parsedTreeData);
+        const extractedChapters: Chapter[] = flatNodes.map(node => ({
+          id: node.key,
+          num: node.num,
+          label: node.label,
+          parentId: node.parentId || null,
+          content: parsedChapterText[node.key] || ''
+        }));
+        
+        // Trier les chapitres
+        const sortedChapters = sortChapters(extractedChapters);
+        setChapters(sortedChapters);
+        
+        // Générer le contenu combiné pour l'éditeur
+        const combined = generateCombinedContent(sortedChapters);
+        setCombinedContent(combined);
+        
+        console.log("Rechargement forcé terminé");
+      }
+    } catch (error) {
+      console.error("Erreur lors du rechargement forcé:", error);
+    } finally {
+      forceUpdateRef.current = false;
+    }
+  }, []);
   
   console.log("🚀 SummarySpecifications: Payload reçu depuis localStorage:", {
     treeData,
     chapterTextMap
   });
+  
+  // Configuration de l'éditeur TipTap
+  const editor = useEditor({
+    immediatelyRender: true,
+    onCreate({ editor }) {
+      setEditor(editor);
+    },
+    onDestroy() {
+      setEditor(null);
+    },
+    onUpdate({ editor }) {
+      // Utiliser setTimeout pour éviter les mises à jour pendant la saisie
+      // Cela permettra à l'utilisateur de finir sa saisie avant de traiter les modifications
+      if (editorUpdateTimeout.current) {
+        clearTimeout(editorUpdateTimeout.current);
+      }
+      editorUpdateTimeout.current = setTimeout(() => {
+        extractChapterTitles(editor.getHTML());
+      }, 1000); // Délai d'une seconde après la dernière frappe
 
+      // Mise à jour du contenu avec un délai plus long
+      if (contentUpdateTimeout.current) {
+        clearTimeout(contentUpdateTimeout.current);
+      }
+      contentUpdateTimeout.current = setTimeout(() => {
+        extractAndSaveContent(editor.getHTML());
+      }, 2000); // Délai de deux secondes pour la sauvegarde du contenu
+    },
+    onBlur({ editor }) {
+      // Extraire les titres et sauvegarder le contenu lorsque l'éditeur perd le focus
+      extractChapterTitles(editor.getHTML());
+      extractAndSaveContent(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 px-14 pb-10 cursor-text",
+      }
+    },
+    extensions: [
+      StarterKit,
+      LineHeightExtension,
+      FontSizeExtension,
+      TextAlign.configure({
+        types: ["heading", "paragraph"]
+      }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https"
+      }),
+      Color,
+      Highlight.configure({
+        multicolor: true,
+      }),
+      FontFamily,
+      TextStyle,
+      Underline,
+      Image,
+      ImageResize,
+      Table,
+      TableCell,
+      TableHeader,
+      TableRow,
+      TaskItem.configure({
+        nested: true
+      }),
+      TaskList,
+      ProtectHeadings, // Extension pour protéger les numéros de chapitres
+    ],
+    content: combinedContent,
+  }, [combinedContent]); // Dépendance pour recréer l'éditeur quand le contenu change
+
+  // Effet pour charger les données une seule fois au montage du composant
   useEffect(() => {
-    if (!loading && treeData.length > 0) {
-      processLocalStorageData();
-    }
-  }, [loading, treeData, chapterTextMap]);
+    // Charger les données immédiatement au montage du composant
+    console.log("Chargement initial des données");
+    forceReloadFromLocalStorage();
+    
+    // Nettoyer les timeouts à la destruction du composant
+    return () => {
+      if (editorUpdateTimeout.current) {
+        clearTimeout(editorUpdateTimeout.current);
+        editorUpdateTimeout.current = null;
+      }
+      if (contentUpdateTimeout.current) {
+        clearTimeout(contentUpdateTimeout.current);
+        contentUpdateTimeout.current = null;
+      }
+    };
+  }, [forceReloadFromLocalStorage]);
+
+  // Mise à jour lors de changements dans localStorage (pour synchronisation entre onglets/fenêtres)
+  useEffect(() => {
+    // Fonction pour gérer les événements de changement dans localStorage
+    const handleStorageChange = (event: StorageEvent) => {
+      // Vérifier toutes les clés pertinentes
+      if (event.key === STORAGE_KEYS.TREE_DATA || event.key === STORAGE_KEYS.CHAPTER_TEXT) {
+        console.log(`Changement détecté dans localStorage pour ${event.key}`);
+        forceReloadFromLocalStorage();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [forceReloadFromLocalStorage]);
 
   const processLocalStorageData = () => {
     // Convertir les données du localStorage au format attendu par le composant
     const flatNodes = flattenTreeNodes(treeData);
+    
+    // Vérifier s'il y a des nouveaux chapitres sans contenu et les initialiser
+    let updatedChapterTextMap = { ...chapterTextMap };
+    let hasNewChapters = false;
+    
+    flatNodes.forEach(node => {
+      if (!updatedChapterTextMap[node.key] || updatedChapterTextMap[node.key].trim() === '') {
+        console.log(`Initialisation du contenu pour le nouveau chapitre: ${node.num} - ${node.label}`);
+        updatedChapterTextMap[node.key] = '<p><em>Contenu du chapitre à compléter...</em></p>';
+        hasNewChapters = true;
+      }
+    });
+    
+    // Si des nouveaux chapitres ont été détectés, mettre à jour le chapterTextMap
+    if (hasNewChapters) {
+      updateChapterTextMap(updatedChapterTextMap);
+    }
     
     // Créer des objets chapitre avec leur contenu
     const extractedChapters: Chapter[] = flatNodes.map(node => ({
@@ -199,7 +438,7 @@ export default function SummarySpecifications() {
       num: node.num,
       label: node.label,
       parentId: node.parentId || null,
-      content: chapterTextMap[node.key] || ''
+      content: updatedChapterTextMap[node.key] || '<p><em>Contenu du chapitre à compléter...</em></p>'
     }));
 
     // Trier les chapitres
@@ -260,53 +499,134 @@ export default function SummarySpecifications() {
     
     return combined;
   };
-  
-  // Configuration de l'éditeur TipTap
-  const editor = useEditor({
-    immediatelyRender: false,
-    onCreate({ editor }) {
-      setEditor(editor);
-    },
-    onDestroy() {
-      setEditor(null);
-    },
-    editorProps: {
-      attributes: {
-        class: "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 px-14 pb-10 cursor-text",
+
+  // Extraire et sauvegarder le contenu des chapitres
+  const extractAndSaveContent = (editorContent: string) => {
+    if (!editor || !chapters || chapters.length === 0) return;
+    
+    console.log("Extraction et sauvegarde du contenu des chapitres...");
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(editorContent, 'text/html');
+    
+    // Créer une map mise à jour pour stocker les contenus des chapitres
+    const updatedChapterTextMap = { ...chapterTextMap };
+    
+    // Trouver tous les titres pour délimiter les sections de chapitres
+    const headings = Array.from(doc.querySelectorAll('h1, h2'));
+    
+    headings.forEach((heading, index) => {
+      const text = heading.textContent || '';
+      const match = text.match(/^([\d\.]+)\s*-\s*(.+)$/);
+      
+      if (match) {
+        const chapterNum = match[1].trim();
+        
+        // Trouver le chapitre correspondant
+        const chapter = chapters.find(c => c.num === chapterNum);
+        
+        if (chapter) {
+          // Récupérer tout le contenu jusqu'au prochain titre ou la fin
+          let content = [];
+          let currentNode = heading.nextSibling;
+          
+          // Continuer jusqu'au prochain titre ou jusqu'à la fin
+          while (currentNode && 
+                 !(currentNode instanceof HTMLElement && 
+                  (currentNode.tagName === 'H1' || currentNode.tagName === 'H2'))) {
+            
+            if (currentNode.nodeType === Node.ELEMENT_NODE && 
+                (currentNode as HTMLElement).tagName !== 'HR') {
+              content.push((currentNode as HTMLElement).outerHTML);
+            }
+            
+            // Passer au nœud suivant
+            currentNode = currentNode.nextSibling;
+          }
+          
+          // Sauvegarder le contenu pour ce chapitre
+          if (content.length > 0) {
+            updatedChapterTextMap[chapter.id] = content.join('');
+          } else {
+            // Si pas de contenu, mettre un contenu vide
+            updatedChapterTextMap[chapter.id] = '<p><em>Contenu à compléter...</em></p>';
+          }
+        }
       }
-    },
-    extensions: [
-      StarterKit,
-      LineHeightExtension,
-      FontSizeExtension,
-      TextAlign.configure({
-        types: ["heading", "paragraph"]
-      }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        defaultProtocol: "https"
-      }),
-      Color,
-      Highlight.configure({
-        multicolor: true,
-      }),
-      FontFamily,
-      TextStyle,
-      Underline,
-      Image,
-      ImageResize,
-      Table,
-      TableCell,
-      TableHeader,
-      TableRow,
-      TaskItem.configure({
-        nested: true
-      }),
-      TaskList,
-    ],
-    content: combinedContent,
-  }, [combinedContent]); // Dépendance pour recréer l'éditeur quand le contenu change
+    });
+    
+    // Mettre à jour le chapterTextMap dans localStorage
+    updateChapterTextMap(updatedChapterTextMap);
+    console.log("Contenu des chapitres sauvegardé");
+  };
+
+  // Fonction pour extraire les titres modifiés depuis l'éditeur
+  const extractChapterTitles = (editorContent: string) => {
+    // Ne pas filtrer par focus pour permettre la mise à jour des titres
+    if (!editor) return;
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(editorContent, 'text/html');
+    const headings = Array.from(doc.querySelectorAll('h1, h2'));
+    
+    headings.forEach(heading => {
+      const text = heading.textContent || '';
+      const match = text.match(/^([\d\.]+)\s*-\s*(.+)$/);
+      
+      if (match) {
+        const chapterNum = match[1].trim();
+        const chapterLabel = match[2].trim();
+        
+        // Trouver le chapitre correspondant
+        const chapter = chapters.find(c => c.num === chapterNum);
+        
+        if (chapter && chapter.label !== chapterLabel) {
+          console.log(`Mise à jour du titre: ${chapterNum} - ${chapterLabel}`);
+          // Mettre à jour le nœud dans l'arborescence
+          updateNode(chapter.id, undefined, chapterLabel);
+        }
+      }
+    });
+  };
+
+  // Vérifier et restaurer les titres de chapitres s'ils sont supprimés
+  useEffect(() => {
+    if (!editor || !chapters || chapters.length === 0) return;
+
+    // Cette fonction vérifie que tous les titres de chapitres sont présents
+    const checkChapterHeadings = () => {
+      const content = editor.getHTML();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, 'text/html');
+      
+      // Obtenir tous les titres h1 et h2 du document
+      const headings = Array.from(doc.querySelectorAll('h1, h2'));
+      
+      // Si le nombre de titres est inférieur au nombre de chapitres, 
+      // c'est qu'un titre a été supprimé
+      if (headings.length < chapters.length) {
+        console.warn('🚨 Un titre de chapitre a été supprimé. Restauration du contenu...');
+        
+        // Regénérer le contenu combiné
+        const combined = generateCombinedContent(chapters);
+        
+        // Utiliser setTimeout pour éviter les conflits avec d'autres mises à jour
+        setTimeout(() => {
+          editor.commands.setContent(combined);
+          
+          // Notifier l'utilisateur
+          alert('Attention: Les titres de chapitres ne peuvent pas être supprimés. Le contenu a été restauré.');
+        }, 10);
+      }
+    };
+
+    // Vérifier après chaque mise à jour du contenu
+    editor.on('update', checkChapterHeadings);
+    
+    return () => {
+      editor.off('update', checkChapterHeadings);
+    };
+  }, [editor, chapters, generateCombinedContent]);
 
   if (loading) {
     return <div className="text-center py-8">Chargement des données...</div>;
@@ -319,7 +639,7 @@ export default function SummarySpecifications() {
   return (
     <div className="specifications-summary bg-[#FAFBFD] print:bg-white">
       <div className="print:hidden flex">
-        <Toolbar disablePrint={false} />
+        {editor && <Toolbar disablePrint={false} directEditor={editor} />}
         <ExportButtons />
       </div>
       

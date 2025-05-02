@@ -600,10 +600,14 @@ const ToolbarButton = ({
 
 interface ToolbarProps {
   disablePrint?: boolean;
+  directEditor?: any;
 }
 
-export default function Toolbar({ disablePrint = false }: ToolbarProps){
-    const { editor } = useEditorStore();
+export default function Toolbar({ disablePrint = false, directEditor }: ToolbarProps){
+    const { editor: storeEditor } = useEditorStore();
+    
+    // Utiliser l'éditeur direct s'il est fourni, sinon utiliser celui du store
+    const editor = directEditor || storeEditor;
 
     const sections: {
         label: string;

@@ -379,7 +379,7 @@ export default function MetreArbo() {
 
       if (newCount === 2) {
         setSelectedKey(key);
-        setActiveTab('table');
+        setActiveTab('doc');
         setTimeout(() => setClickCountMap(p => ({ ...p, [key]: 0 })), 400);
       } else if (newCount >= 3) {
         setEditingKey(key);
