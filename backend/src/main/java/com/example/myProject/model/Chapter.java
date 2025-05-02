@@ -26,6 +26,9 @@ public class Chapter {
 
     private String label;
 
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
     @Transient
     private String parentTempId;
 

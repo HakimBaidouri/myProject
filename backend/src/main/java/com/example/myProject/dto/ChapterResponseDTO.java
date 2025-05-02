@@ -9,4 +9,5 @@ public class ChapterResponseDTO {
     private Long parentId;
     private String num;
     private String label;
+    private String content;
 }

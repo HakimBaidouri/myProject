@@ -8,4 +8,5 @@ public class ChapterRequestDTO {
     private Long parentId; // peut être null
     private String num;
     private String label;
+    private String content; // contenu HTML du chapitre
 }
