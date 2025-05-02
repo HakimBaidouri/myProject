@@ -1,5 +1,9 @@
+/* Styles spécifiques à SummarySpecifications */
+
+/* Assurer que l'interface utilisateur est conviviale */
 .specifications-summary {
   width: 100%;
+  min-height: 100vh;
 }
 
 .specifications-container {
@@ -55,18 +59,55 @@
   margin: 1rem 0;
 }
 
-/* Styles d'impression */
+/* Style pour le premier titre afin qu'il n'ait pas de saut de page avant */
+.specifications-summary .tiptap h1:first-child {
+  page-break-before: avoid !important;
+  margin-top: 0 !important;
+}
+
+/* Amélioration des styles de séparateurs */
+.specifications-summary .tiptap hr {
+  margin: 2em 0 !important;
+  border: none !important;
+  border-top: 1px solid #eaeaea !important;
+}
+
+/* Style pour l'éditeur en mode lecture seule */
+.specifications-summary .tiptap:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Styles pour l'impression */
 @media print {
-  .specifications-container {
-    box-shadow: none;
-    padding: 0;
+  /* S'assurer que chaque chapitre commence sur une nouvelle page */
+  h1, h2 {
+    page-break-before: always;
   }
   
-  .chapter-container {
-    break-inside: avoid;
+  /* Éviter les sauts de page au milieu des éléments importants */
+  p, ul, ol, table {
+    page-break-inside: avoid;
   }
   
-  hr {
-    display: none;
+  /* Styles de marges et espacement pour l'impression */
+  .specifications-summary .tiptap {
+    padding: 5mm !important;
+  }
+  
+  /* Assurer que les titres sont bien visibles */
+  h1 {
+    font-size: 18pt !important;
+    margin-bottom: 2.5mm !important;
+  }
+  
+  h2 {
+    font-size: 16pt !important;
+    margin-bottom: 2mm !important;
+  }
+  
+  h3, h4, h5 {
+    font-size: 14pt !important;
+    margin-bottom: 1.25mm !important;
   }
 } 

@@ -8,10 +8,10 @@ export default function Summary() {
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-6">Project Summary</h1>
+      <h1 className="text-2xl font-bold mb-6 print:hidden">Project Summary</h1>
       
       <Tabs defaultValue="spreadsheet" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-2 print:hidden">
           <TabsTrigger value="spreadsheet">Tableur</TabsTrigger>
           <TabsTrigger value="specifications">Cahier des charges</TabsTrigger>
         </TabsList>
