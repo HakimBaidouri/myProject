@@ -35,13 +35,39 @@ interface Chapter {
   content: string;
 }
 
-// Extension pour empêcher la suppression des titres de chapitres
+// Fonction auxiliaire pour vérifier si un en-tête est protégé
+function isHeadingProtected(editor: any) {
+  const { selection } = editor.state;
+  const { $head } = selection;
+  
+  // Vérifier si on se trouve dans un titre h1 ou h2
+  if ($head.parent.type.name === 'heading' && 
+      ($head.parent.attrs.level === 1 || $head.parent.attrs.level === 2)) {
+    
+    const nodeText = $head.parent.textContent;
+    // Vérifier si le texte contient un numéro de chapitre
+    const match = nodeText.match(/^([\d\.]+)\s*-\s*/);
+    
+    if (match) {
+      return true; // Ce titre est protégé
+    }
+  }
+  
+  return false; // Ce n'est pas un titre protégé
+}
+
+// Fonction de gestion des touches pour les titres protégés
+const handleProtectedHeading = ({ editor }: { editor: any }) => {
+  return isHeadingProtected(editor);
+};
+
+// Extension pour empêcher la modification des titres de chapitres
 const ProtectHeadings = Extension.create({
   name: 'protectHeadings',
   
   addKeyboardShortcuts() {
     return {
-      // Empêcher la suppression des numéros de chapitres
+      // Empêcher la suppression des titres de chapitres
       Backspace: ({ editor }) => {
         // Ne pas interférer avec les commandes d'historique (undo)
         if (editor.view.state.selection.$head.pos === 0) {
@@ -63,17 +89,15 @@ const ProtectHeadings = Extension.create({
             const numPart = match[0]; // La partie "X.Y - "
             const numPartLength = numPart.length;
             
-            // Si le curseur est dans la partie numéro, empêcher la suppression
-            if ($head.parentOffset <= numPartLength) {
-              return true; // Empêcher l'action par défaut
-            }
+            // Protection renforcée: empêcher toute modification de l'ensemble du titre
+            return true; // Empêcher l'action par défaut
           }
         }
         
         return false; // Laisser passer les autres cas
       },
       
-      // Empêcher la suppression des numéros avec Delete
+      // Empêcher la suppression des titres avec Delete
       Delete: ({ editor }) => {
         const { selection } = editor.state;
         const { empty, $head } = selection;
@@ -87,19 +111,74 @@ const ProtectHeadings = Extension.create({
           const match = nodeText.match(/^([\d\.]+)\s*-\s*/);
           
           if (match) {
-            const numPart = match[0]; // La partie "X.Y - "
-            const numPartLength = numPart.length;
-            
-            // Si le curseur est juste avant la partie numéro ou dans celle-ci
-            // et qu'une suppression pourrait affecter le numéro
-            if ($head.parentOffset < numPartLength) {
-              return true; // Empêcher l'action par défaut
-            }
+            // Protection renforcée: empêcher toute modification de l'ensemble du titre
+            return true; // Empêcher l'action par défaut
           }
         }
         
         return false; // Laisser passer les autres cas
       },
+      
+      // Bloquer toutes les touches alphabétiques et numériques pour les titres
+      'Enter': ({ editor }) => {
+        const { selection } = editor.state;
+        const { $head } = selection;
+        
+        // Vérifier si on se trouve dans un titre h1 ou h2
+        if ($head.parent.type.name === 'heading' && 
+            ($head.parent.attrs.level === 1 || $head.parent.attrs.level === 2)) {
+          
+          const nodeText = $head.parent.textContent;
+          // Vérifier si le texte contient un numéro de chapitre
+          const match = nodeText.match(/^([\d\.]+)\s*-\s*/);
+          
+          if (match) {
+            // Bloquer la touche dans les titres
+            return true;
+          }
+        }
+        
+        return false;
+      },
+      
+      // On ajoute également des bloqueurs pour les caractères individuels
+      'Space': handleProtectedHeading,
+      'a': handleProtectedHeading,
+      'b': handleProtectedHeading,
+      'c': handleProtectedHeading,
+      'd': handleProtectedHeading,
+      'e': handleProtectedHeading,
+      'f': handleProtectedHeading,
+      'g': handleProtectedHeading,
+      'h': handleProtectedHeading,
+      'i': handleProtectedHeading,
+      'j': handleProtectedHeading,
+      'k': handleProtectedHeading,
+      'l': handleProtectedHeading,
+      'm': handleProtectedHeading,
+      'n': handleProtectedHeading,
+      'o': handleProtectedHeading,
+      'p': handleProtectedHeading,
+      'q': handleProtectedHeading,
+      'r': handleProtectedHeading,
+      's': handleProtectedHeading,
+      't': handleProtectedHeading,
+      'u': handleProtectedHeading,
+      'v': handleProtectedHeading,
+      'w': handleProtectedHeading,
+      'x': handleProtectedHeading,
+      'y': handleProtectedHeading,
+      'z': handleProtectedHeading,
+      '0': handleProtectedHeading,
+      '1': handleProtectedHeading,
+      '2': handleProtectedHeading,
+      '3': handleProtectedHeading,
+      '4': handleProtectedHeading,
+      '5': handleProtectedHeading,
+      '6': handleProtectedHeading,
+      '7': handleProtectedHeading,
+      '8': handleProtectedHeading,
+      '9': handleProtectedHeading,
       
       // Permettre explicitement les raccourcis undo et redo
       'Mod-z': () => false, // Permet à l'événement de continuer son traitement normal
@@ -318,6 +397,8 @@ export default function SummarySpecifications() {
       if (editorUpdateTimeout.current) {
         clearTimeout(editorUpdateTimeout.current);
       }
+      
+      // Vérification du contenu sans mise à jour des titres vers métré
       editorUpdateTimeout.current = setTimeout(() => {
         extractChapterTitles(editor.getHTML());
       }, 1000); // Délai d'une seconde après la dernière frappe
@@ -331,8 +412,9 @@ export default function SummarySpecifications() {
       }, 2000); // Délai de deux secondes pour la sauvegarde du contenu
     },
     onBlur({ editor }) {
-      // Extraire les titres et sauvegarder le contenu lorsque l'éditeur perd le focus
+      // Vérification du contenu sans mise à jour des titres vers métré
       extractChapterTitles(editor.getHTML());
+      // Sauvegarder le contenu lorsque l'éditeur perd le focus
       extractAndSaveContent(editor.getHTML());
     },
     editorProps: {
@@ -560,32 +642,22 @@ export default function SummarySpecifications() {
     console.log("Contenu des chapitres sauvegardé");
   };
 
-  // Fonction pour extraire les titres modifiés depuis l'éditeur
+  // Fonction pour extraire les titres depuis l'éditeur (modification désactivée)
   const extractChapterTitles = (editorContent: string) => {
-    // Ne pas filtrer par focus pour permettre la mise à jour des titres
+    // Fonctionnalité de modification des titres depuis le récap vers métré désactivée
     if (!editor) return;
     
+    // On garde le parsing pour la vérification mais on n'effectue pas de mise à jour
     const parser = new DOMParser();
     const doc = parser.parseFromString(editorContent, 'text/html');
     const headings = Array.from(doc.querySelectorAll('h1, h2'));
     
+    // Parcourir les titres pour traitement interne uniquement
     headings.forEach(heading => {
       const text = heading.textContent || '';
+      // Vérifier que le format est correct
       const match = text.match(/^([\d\.]+)\s*-\s*(.+)$/);
-      
-      if (match) {
-        const chapterNum = match[1].trim();
-        const chapterLabel = match[2].trim();
-        
-        // Trouver le chapitre correspondant
-        const chapter = chapters.find(c => c.num === chapterNum);
-        
-        if (chapter && chapter.label !== chapterLabel) {
-          console.log(`Mise à jour du titre: ${chapterNum} - ${chapterLabel}`);
-          // Mettre à jour le nœud dans l'arborescence
-          updateNode(chapter.id, undefined, chapterLabel);
-        }
-      }
+      // Aucune mise à jour du nœud dans l'arborescence effectuée
     });
   };
 
@@ -638,9 +710,14 @@ export default function SummarySpecifications() {
 
   return (
     <div className="specifications-summary bg-[#FAFBFD] print:bg-white">
-      <div className="print:hidden flex">
-        {editor && <Toolbar disablePrint={false} directEditor={editor} />}
-        <ExportButtons />
+      <div className="print:hidden flex flex-col">
+        <div className="flex mb-2">
+          {editor && <Toolbar disablePrint={false} directEditor={editor} />}
+          <ExportButtons />
+        </div>
+        <div className="bg-yellow-100 p-2 rounded text-sm mb-2 border border-yellow-300">
+          <strong>Note:</strong> Les titres des chapitres ne peuvent pas être modifiés depuis le récap. Pour modifier un titre, veuillez utiliser la section Métré.
+        </div>
       </div>
       
       <div className="size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible">

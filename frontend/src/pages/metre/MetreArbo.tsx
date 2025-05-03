@@ -37,7 +37,7 @@ export default function MetreArbo() {
   const [treeData, setTreeData] = useState<TreeNodeData[]>([]);
   const [tableDataMap, setTableDataMap] = useState<Record<string, any[][]>>({});
   const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>({});
-  const [activeTab, setActiveTab] = useState<'table' | 'doc'>('table');
+  const [activeTab, setActiveTab] = useState<'table' | 'doc'>('doc');
   const [chapterTextMap, setChapterTextMap] = useState<Record<string, string>>({});
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -605,16 +605,16 @@ export default function MetreArbo() {
 
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
               <button
-                onClick={() => setActiveTab('table')}
-                style={{ fontWeight: activeTab === 'table' ? 'bold' : 'normal' }}
-              >
-                Tableur
-              </button>
-              <button
                 onClick={() => setActiveTab('doc')}
                 style={{ fontWeight: activeTab === 'doc' ? 'bold' : 'normal' }}
               >
                 Cahier des charges
+              </button>
+              <button
+                onClick={() => setActiveTab('table')}
+                style={{ fontWeight: activeTab === 'table' ? 'bold' : 'normal' }}
+              >
+                Tableur
               </button>
             </div>
 
