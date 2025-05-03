@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+// @ts-ignore
+import { useState, useEffect, useRef, useCallback } from 'react';
+// @ts-ignore
 import { HotTable } from '@handsontable/react';
-import Handsontable from 'handsontable';
+import Handsontable, { CellChange } from 'handsontable';
+import { HotTableProps } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.min.css';
-import { useLocalStorageData, TreeNodeData } from '../../hooks/useLocalStorageData';
+import { useLocalStorageData, TreeNodeData, STORAGE_KEYS } from '../../hooks/useLocalStorageData';
 
 // Enregistrer tous les modules Handsontable, y compris MergedCells
 registerAllModules();
@@ -19,6 +22,9 @@ type MergedCellConfig = {
 interface RowData {
   isChapterTitle?: boolean;
   chapterTitle?: string;
+  chapterId?: string; // ID du chapitre pour suivre les modifications
+  lineIndex?: number; // Index de la ligne dans le tableau original
+  isEmptyLine?: boolean; // Pour les lignes vides entre les chapitres
 }
 
 // Type simplifié pour la compatibilité avec le localStorage
@@ -49,13 +55,61 @@ interface ChapterWithLines {
 export default function SummarySpreadsheet() {
   const [consolidatedData, setConsolidatedData] = useState<(any[] & RowData)[]>([]);
   const [mergedCellsConfig, setMergedCellsConfig] = useState<MergedCellConfig[]>([]);
-  const { treeData, tableDataMap, loading } = useLocalStorageData();
+  const { treeData, tableDataMap, loading, updateTableDataMap } = useLocalStorageData();
+  const hotTableRef = useRef<HotTable>(null);
+  const dataMapRef = useRef<Record<number, { chapterId: string, lineIndex: number }>>({});
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
   
   console.log("🚀 SummarySpreadsheet: Payload reçu depuis localStorage:", {
     treeData,
     tableDataMap
   });
 
+  // Fonction pour forcer le rafraîchissement des données depuis le localStorage
+  const forceRefresh = useCallback(() => {
+    console.log("🔄 Forçage du rafraîchissement des données...");
+    // Rechargement des données depuis localStorage
+    const savedTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
+    const savedTreeData = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
+    
+    let refreshedTableDataMap = tableDataMap;
+    let refreshedTreeData = treeData;
+    
+    if (savedTableData) {
+      try {
+        refreshedTableDataMap = JSON.parse(savedTableData);
+      } catch (error) {
+        console.error("Erreur lors du parsing des données de tableau:", error);
+      }
+    }
+    
+    if (savedTreeData) {
+      try {
+        refreshedTreeData = JSON.parse(savedTreeData);
+      } catch (error) {
+        console.error("Erreur lors du parsing des données d'arborescence:", error);
+      }
+    }
+    
+    // Si des données ont été récupérées, mettre à jour le state
+    if (Object.keys(refreshedTableDataMap).length > 0 && refreshedTreeData.length > 0) {
+      const chaptersData = convertLocalStorageDataToChapters(refreshedTreeData, refreshedTableDataMap);
+      processProjectData(chaptersData);
+      setLastRefreshTime(Date.now());
+    }
+  }, [tableDataMap, treeData]);
+
+  // Forcer un rafraîchissement au montage du composant
+  useEffect(() => {
+    // Attendre un court délai pour s'assurer que localStorage est bien initialisé
+    const timer = setTimeout(() => {
+      forceRefresh();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Effet standard pour mettre à jour lorsque les données changent
   useEffect(() => {
     if (!loading && treeData.length > 0 && Object.keys(tableDataMap).length > 0) {
       // Convertir les données du localStorage au format attendu par le composant
@@ -78,19 +132,27 @@ export default function SummarySpreadsheet() {
       // Convertir les lignes du tableau en format attendu
       const lines = tableData
         .filter(row => row[0] !== 'Total') // Ignorer les lignes de total
-        .map(row => ({
-          mainTableLine: {
-            gr: row[0],
-            num: row[1],
-            title: row[2],
-            nm: row[3],
-            unit: row[4],
-            quantity: parseFloat(row[5]) || 0,
-            unitPrice: parseFloat(row[6]) || 0,
-            totalPrice: parseFloat(row[7]) || 0,
-            comments: row[8] || ''
-          }
-        }));
+        .map(row => {
+          // S'assurer que les valeurs numériques sont correctement traitées
+          const quantity = typeof row[5] === 'string' ? parseFloat(row[5]) || 0 : Number(row[5]) || 0;
+          const unitPrice = typeof row[6] === 'string' ? parseFloat(row[6]) || 0 : Number(row[6]) || 0;
+          // Calculer explicitement le prix total ici aussi
+          const totalPrice = quantity * unitPrice;
+          
+          return {
+            mainTableLine: {
+              gr: row[0],
+              num: row[1],
+              title: row[2],
+              nm: row[3],
+              unit: row[4],
+              quantity: quantity,
+              unitPrice: unitPrice,
+              totalPrice: totalPrice, // Utiliser le prix calculé
+              comments: row[8] || ''
+            }
+          };
+        });
       
       return {
         chapter: {
@@ -118,9 +180,77 @@ export default function SummarySpreadsheet() {
     return result;
   };
 
+  // Ajuster la fonction de traitement des changements pour gérer correctement les types
+  const handleTableChange = (changes: CellChange[] | null, source: Handsontable.ChangeSource) => {
+    if (!changes || changes.length === 0 || source !== 'edit') return;
+    
+    // Clone des données actuelles pour modification
+    const updatedTableDataMap = { ...tableDataMap };
+    let hasChanges = false;
+
+    // Traiter chaque changement
+    changes.forEach((change) => {
+      const [row, prop, oldValue, newValue] = change;
+      const col = typeof prop === 'number' ? prop : parseInt(prop.toString(), 10);
+      
+      // Récupérer les infos de la ligne modifiée
+      const rowData = consolidatedData[row] as RowData;
+      
+      // Ignorer si c'est un titre de chapitre ou une ligne vide
+      if (rowData.isChapterTitle || rowData.isEmptyLine) return;
+      
+      // Récupérer l'ID du chapitre et l'index de la ligne
+      const chapterId = rowData.chapterId;
+      const lineIndex = rowData.lineIndex;
+      
+      if (chapterId && lineIndex !== undefined) {
+        // Récupérer le tableau de données du chapitre
+        const chapterData = [...updatedTableDataMap[chapterId]];
+        
+        // Mettre à jour la valeur dans le tableau
+        chapterData[lineIndex][col] = newValue;
+        
+        // Si col est 5 (quantité) ou 6 (prix unitaire), recalculer le prix total
+        if (col === 5 || col === 6) {
+          // Convertir explicitement en nombres
+          const quantity = typeof chapterData[lineIndex][5] === 'string' ? 
+            parseFloat(chapterData[lineIndex][5]) || 0 : 
+            Number(chapterData[lineIndex][5]) || 0;
+          
+          const unitPrice = typeof chapterData[lineIndex][6] === 'string' ? 
+            parseFloat(chapterData[lineIndex][6]) || 0 : 
+            Number(chapterData[lineIndex][6]) || 0;
+          
+          // Calculer le nouveau prix total
+          const totalPrice = quantity * unitPrice;
+          console.log(`Calcul du prix: ${quantity} × ${unitPrice} = ${totalPrice}`);
+          
+          // Mettre à jour le prix total dans les données
+          chapterData[lineIndex][7] = totalPrice;
+          
+          // Mettre également à jour la ligne dans consolidatedData pour le rendu immédiat
+          consolidatedData[row][7] = totalPrice;
+        }
+        
+        // Mettre à jour le tableau dans la map
+        updatedTableDataMap[chapterId] = chapterData;
+        hasChanges = true;
+      }
+    });
+    
+    // Sauvegarder les modifications si nécessaire
+    if (hasChanges) {
+      updateTableDataMap(updatedTableDataMap);
+      
+      // Forcer une mise à jour de l'interface pour afficher les prix recalculés
+      setConsolidatedData([...consolidatedData]);
+    }
+  };
+
   const processProjectData = (chapters: ChapterWithLines[]) => {
     const data: (any[] & RowData)[] = [];
     const mergedCells: MergedCellConfig[] = [];
+    const dataMap: Record<number, { chapterId: string, lineIndex: number }> = {};
     
     // Créer une structure plate des chapitres pour l'affichage
     const flatChapters = chapters;
@@ -156,6 +286,7 @@ export default function SummarySpreadsheet() {
       // Marquer cette ligne comme un titre de chapitre
       chapterRow.isChapterTitle = true;
       chapterRow.chapterTitle = fullChapterTitle;
+      chapterRow.chapterId = chapter.id;
       
       // Enregistrer les informations pour fusionner les cellules de cette ligne
       mergedCells.push({
@@ -168,9 +299,12 @@ export default function SummarySpreadsheet() {
       data.push(chapterRow);
       
       // Ajouter les lignes du chapitre
-      lines.forEach(lineWithDetails => {
+      lines.forEach((lineWithDetails, lineIndex) => {
         const line = lineWithDetails.mainTableLine;
-        data.push([
+        const rowIndex = data.length;
+        
+        // Créer la ligne avec les métadonnées
+        const lineRow = [
           line.gr,
           line.num,
           line.title,
@@ -180,14 +314,25 @@ export default function SummarySpreadsheet() {
           line.unitPrice,
           line.totalPrice,
           line.comments
-        ]);
+        ] as any[] & RowData;
+        
+        // Ajouter des métadonnées pour identifier la ligne
+        lineRow.chapterId = chapter.id;
+        lineRow.lineIndex = lineIndex; // Position dans le tableau d'origine
+        
+        data.push(lineRow);
+        
+        // Stocker la correspondance entre l'index dans consolidatedData et les données originales
+        dataMap[rowIndex] = { chapterId: chapter.id, lineIndex };
         
         // Ajouter au total global
         globalTotal += Number(line.totalPrice) || 0;
       });
       
       // Ajouter une ligne vide après chaque chapitre
-      data.push(['', '', '', '', '', '', '', '', '']);
+      const emptyRow = ['', '', '', '', '', '', '', '', ''] as any[] & RowData;
+      emptyRow.isEmptyLine = true;
+      data.push(emptyRow);
     });
     
     console.log('Total global calculé:', globalTotal);
@@ -224,6 +369,9 @@ export default function SummarySpreadsheet() {
     
     data.push(totalRow);
     
+    // Sauvegarder les références pour l'édition
+    dataMapRef.current = dataMap;
+    
     setConsolidatedData(data);
     setMergedCellsConfig(mergedCells);
   };
@@ -240,9 +388,31 @@ export default function SummarySpreadsheet() {
     { data: 4 },
     { data: 5, type: 'numeric' },
     { data: 6, type: 'numeric' },
-    { data: 7, type: 'numeric' },
+    { data: 7, type: 'numeric', readOnly: true }, // Prix est calculé automatiquement (readonly)
     { data: 8 }
   ];
+
+  // Fonction pour déterminer si une cellule est en lecture seule
+  const isCellReadOnly = (row: number, col: number) => {
+    const rowData = consolidatedData[row] as RowData;
+    
+    // Titres de chapitres et lignes vides en lecture seule
+    if (rowData && (rowData.isChapterTitle || rowData.isEmptyLine)) {
+      return true;
+    }
+    
+    // Dernière ligne (TOTAL PROJET) en lecture seule
+    if (row === consolidatedData.length - 1) {
+      return true;
+    }
+    
+    // Prix est toujours calculé automatiquement
+    if (col === 7) {
+      return true;
+    }
+    
+    return false;
+  };
 
   if (loading) {
     return <div className="text-center py-8">Chargement des données...</div>;
@@ -254,11 +424,31 @@ export default function SummarySpreadsheet() {
 
   return (
     <div className="summary-spreadsheet">
-      <h2 className="text-xl font-semibold mb-4">Spreadsheet Summary</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Spreadsheet Summary</h2>
+        <button 
+          onClick={forceRefresh}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-1"
+        >
+          <span>↻</span> Rafraîchir
+        </button>
+      </div>
+      
+      <div className="bg-yellow-100 p-3 mb-4 rounded border border-yellow-300 text-sm">
+        <strong>Note:</strong> Vous pouvez modifier les données dans ce tableur. 
+        Les modifications seront synchronisées avec la section Métré.
+        <ul className="list-disc ml-5 mt-1">
+          <li>Les titres des chapitres ne sont pas modifiables</li>
+          <li>Le prix est calculé automatiquement</li>
+          <li>L'ajout et la suppression de lignes ne sont pas disponibles</li>
+        </ul>
+        <p className="mt-1 text-xs text-gray-600">Dernière mise à jour: {new Date(lastRefreshTime).toLocaleTimeString()}</p>
+      </div>
       
       {consolidatedData.length > 0 ? (
         <div className="hot-table-container">
           <HotTable
+            ref={hotTableRef}
             data={consolidatedData}
             rowHeaders={true}
             colHeaders={columnHeaders}
@@ -266,10 +456,40 @@ export default function SummarySpreadsheet() {
             licenseKey="non-commercial-and-evaluation"
             height="600"
             stretchH="all"
-            readOnly={true}
+            readOnly={false}
             className="metre-summary-table"
             mergeCells={mergedCellsConfig}
+            afterChange={handleTableChange}
+            beforeChange={(changes, source) => {
+              if (!changes || source !== 'edit') return true;
+              
+              // Filtrer les changements pour éviter la modification des cellules en lecture seule
+              const filteredChanges = changes.filter(([row, col, oldValue, newValue]) => {
+                return !isCellReadOnly(row, parseInt(col.toString()));
+              });
+              
+              // Si tous les changements sont filtrés, annuler l'opération
+              if (filteredChanges.length === 0) {
+                return false;
+              }
+              
+              // Remplacer les changements par la version filtrée
+              changes.splice(0, changes.length, ...filteredChanges);
+              
+              return true;
+            }}
             beforeRenderer={(TD, row, col, prop, value, cellProperties) => {
+              // Déterminer si la cellule est en lecture seule
+              const isReadOnly = isCellReadOnly(row, col);
+              
+              // Appliquer les styles pour les cellules en lecture seule
+              if (isReadOnly) {
+                cellProperties.readOnly = true;
+                TD.style.backgroundColor = '#f8f9fa';
+                TD.style.color = '#6c757d';
+              }
+            }}
+            afterRenderer={(TD, row, col, prop, value, cellProperties) => {
               // Vérifier si la ligne actuelle est un titre de chapitre
               const rowData = consolidatedData[row] as RowData;
               if (rowData && rowData.isChapterTitle) {
@@ -317,6 +537,21 @@ export default function SummarySpreadsheet() {
                     // Masquer le contenu des autres cellules dans la ligne fusionnée
                     TD.textContent = '';
                   }
+                }
+              }
+              // Formatage pour les cellules de type numeric
+              else if ((col === 5 || col === 6 || col === 7) && typeof value === 'number') {
+                TD.style.textAlign = 'right';
+                
+                // Format différent pour le prix (2 décimales et €)
+                if (col === 7) {
+                  const numValue = Number(value);
+                  TD.textContent = `${numValue.toFixed(2)} €`;
+                } 
+                // Format pour quantité et PU (2 décimales)
+                else {
+                  const numValue = Number(value);
+                  TD.textContent = numValue.toFixed(2);
                 }
               }
             }}
