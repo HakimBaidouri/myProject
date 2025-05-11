@@ -103,6 +103,15 @@ export default function MetreArbo() {
             if (versionExists) {
               versionId = savedCurrentVersion;
               console.log(`Version courante sélectionnée: ${versionId}`);
+            } else {
+              // Si la version courante n'existe pas dans la liste des versions,
+              // c'est peut-être parce qu'elle a été supprimée mais pas mise à jour correctement
+              console.log(`Version courante ${savedCurrentVersion} non trouvée dans les versions disponibles`);
+              // Utiliser la dernière version disponible
+              versionId = versions[versions.length - 1].id;
+              // Mettre à jour la version courante dans localStorage
+              localStorage.setItem(STORAGE_KEYS.CURRENT_VERSION, versionId);
+              console.log(`Version courante mise à jour vers: ${versionId}`);
             }
           } else {
             // Sinon, utiliser la dernière version
@@ -935,22 +944,133 @@ export default function MetreArbo() {
     localStorage.setItem(STORAGE_KEYS.CURRENT_VERSION, versionId);
   };
 
+  // Fonction pour supprimer une version
+  const deleteVersion = (versionId: string) => {
+    // Empêcher la suppression s'il ne reste qu'une seule version
+    if (projectVersions.length <= 1) {
+      alert("Impossible de supprimer la seule version existante du projet.");
+      return;
+    }
+    
+    // Demander confirmation
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer cette phase du projet ? Cette action est irréversible.`)) {
+      return;
+    }
+    
+    console.log(`Début de la suppression de la version: ${versionId}`);
+    console.log(`Versions avant suppression:`, projectVersions);
+    
+    try {
+      // Supprimer VRAIMENT toutes les données de localStorage pour cette version
+      const versionKeys = getVersionStorageKeys(versionId);
+      Object.values(versionKeys).forEach(key => {
+        console.log(`Suppression de la clé: ${key}`);
+        localStorage.removeItem(key);
+      });
+      
+      // Filtrer les versions pour supprimer celle-ci
+      const updatedVersions = projectVersions.filter(v => v.id !== versionId);
+      console.log(`Versions après filtrage:`, updatedVersions);
+      
+      // Déterminer la nouvelle version courante si nécessaire
+      let newCurrentVersion = currentVersion;
+      if (currentVersion === versionId) {
+        newCurrentVersion = updatedVersions[0].id;
+        console.log(`Version courante supprimée, passage à: ${newCurrentVersion}`);
+      }
+      
+      // IMPORTANT: Mettre à jour l'état ET le localStorage de manière synchrone
+      setProjectVersions(updatedVersions);
+      localStorage.setItem(STORAGE_KEYS.PROJECT_VERSIONS, JSON.stringify(updatedVersions));
+      
+      if (currentVersion === versionId) {
+        // Mettre à jour la version courante dans localStorage
+        localStorage.setItem(STORAGE_KEYS.CURRENT_VERSION, newCurrentVersion);
+        
+        // Basculer vers la nouvelle version après un court délai
+        setTimeout(() => {
+          setCurrentVersion(newCurrentVersion);
+          // Forcer le rechargement des données
+          const newVersionKeys = getVersionStorageKeys(newCurrentVersion);
+          const savedTreeData = localStorage.getItem(newVersionKeys.TREE_DATA);
+          if (savedTreeData) {
+            setTreeData(JSON.parse(savedTreeData));
+          } else {
+            setTreeData([]);
+          }
+          
+          const savedTableData = localStorage.getItem(newVersionKeys.TABLE_DATA);
+          if (savedTableData) {
+            setTableDataMap(JSON.parse(savedTableData));
+          } else {
+            setTableDataMap({});
+          }
+          
+          const savedDetailData = localStorage.getItem(newVersionKeys.DETAIL_DATA);
+          if (savedDetailData) {
+            setDetailDataMap(JSON.parse(savedDetailData));
+          } else {
+            setDetailDataMap({});
+          }
+          
+          const savedChapterText = localStorage.getItem(newVersionKeys.CHAPTER_TEXT);
+          if (savedChapterText) {
+            setChapterTextMap(JSON.parse(savedChapterText));
+          } else {
+            setChapterTextMap({});
+          }
+          
+          console.log("Données rechargées pour la nouvelle version courante");
+        }, 100);
+      }
+      
+      // Pour garantir que les modifications sont bien persistées, forcer un refresh de la page
+      // Ceci est une mesure extrême mais garantit que tout est correctement rechargé
+      setTimeout(() => {
+        alert("La phase a été supprimée avec succès. La page va être rechargée pour appliquer les changements.");
+        window.location.reload();
+      }, 500);
+      
+    } catch (error) {
+      console.error("Erreur lors de la suppression de la version:", error);
+      alert("Une erreur est survenue lors de la suppression de la phase.");
+    }
+  };
+
   return (
     <div className="metre-layout">
       <aside className="metre-tree">
         <div className="version-controls" style={{ margin: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <select 
-            value={currentVersion || ''} 
-            onChange={(e) => switchVersion(e.target.value)}
-            style={{ padding: '0.5rem', borderRadius: '4px' }}
-          >
-            <option value="">Sélectionner une version</option>
-            {projectVersions.map(version => (
-              <option key={version.id} value={version.id}>
-                {version.name} ({new Date(version.createdAt).toLocaleDateString()})
-              </option>
-            ))}
-          </select>
+          <div className="version-selector" style={{ display: 'flex', gap: '0.5rem' }}>
+            <select 
+              value={currentVersion || ''} 
+              onChange={(e) => switchVersion(e.target.value)}
+              style={{ padding: '0.5rem', borderRadius: '4px', flex: 1 }}
+            >
+              <option value="">Sélectionner une version</option>
+              {projectVersions.map(version => (
+                <option key={version.id} value={version.id}>
+                  {version.name} ({new Date(version.createdAt).toLocaleDateString()})
+                </option>
+              ))}
+            </select>
+            {projectVersions.length > 1 && (
+              <button 
+                onClick={() => deleteVersion(currentVersion)}
+                title="Supprimer cette phase"
+                style={{ 
+                  padding: '0.5rem', 
+                  borderRadius: '4px', 
+                  backgroundColor: '#f44336', 
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                🗑️
+              </button>
+            )}
+          </div>
 
           {isCreatingVersion ? (
             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -958,7 +1078,7 @@ export default function MetreArbo() {
                 type="text"
                 value={newVersionName}
                 onChange={(e) => setNewVersionName(e.target.value)}
-                placeholder="Nom de la version"
+                placeholder="Nom de la phase"
                 style={{ padding: '0.5rem', borderRadius: '4px', flex: 1 }}
               />
               <button 
@@ -979,7 +1099,7 @@ export default function MetreArbo() {
               onClick={() => setIsCreatingVersion(true)}
               style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#2196F3', color: 'white' }}
             >
-              ➕ Créer une nouvelle version
+              ➕ Créer une nouvelle phase
             </button>
           )}
         </div>
