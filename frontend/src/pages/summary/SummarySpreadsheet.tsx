@@ -6,7 +6,7 @@ import Handsontable from 'handsontable';
 import { HotTableProps } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.min.css';
-import { useLocalStorageData, TreeNodeData, STORAGE_KEYS } from '../../hooks/useLocalStorageData';
+import { useLocalStorageData, TreeNodeData, STORAGE_KEYS, getVersionStorageKeys } from '../../hooks/useLocalStorageData';
 // Pour l'export Excel
 import * as XLSX from 'xlsx';
 
@@ -60,23 +60,112 @@ interface ChapterWithLines {
 export default function SummarySpreadsheet() {
   const [consolidatedData, setConsolidatedData] = useState<(any[] & RowData)[]>([]);
   const [mergedCellsConfig, setMergedCellsConfig] = useState<MergedCellConfig[]>([]);
-  const { treeData, tableDataMap, loading, updateTableDataMap } = useLocalStorageData();
+  const { 
+    treeData, 
+    tableDataMap, 
+    loading, 
+    updateTableDataMap, 
+    currentVersion, 
+    projectVersions 
+  } = useLocalStorageData();
   // @ts-ignore
   const hotTableRef = useRef<HotTable>(null);
   const dataMapRef = useRef<Record<number, { chapterId: string, lineIndex: number }>>({});
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
+  const [versionName, setVersionName] = useState<string>('');
+  const lastCheckedVersionRef = useRef<string | null>(currentVersion);
+  
+  // Trouver le nom de la version actuelle
+  useEffect(() => {
+    if (currentVersion && projectVersions.length > 0) {
+      const version = projectVersions.find(v => v.id === currentVersion);
+      if (version) {
+        setVersionName(version.name);
+      } else {
+        setVersionName('Version inconnue');
+      }
+    } else {
+      setVersionName('Version par défaut');
+    }
+  }, [currentVersion, projectVersions]);
   
   console.log("🚀 SummarySpreadsheet: Payload reçu depuis localStorage:", {
     treeData,
-    tableDataMap
+    tableDataMap,
+    currentVersion,
+    versionName
   });
+
+  // Ajouter un intervalle pour vérifier périodiquement si la version a changé
+  useEffect(() => {
+    // Vérifier si la version courante a changé dans localStorage
+    const checkVersionChange = () => {
+      const storedVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+      
+      if (storedVersion && storedVersion !== lastCheckedVersionRef.current) {
+        console.log(`🔄 Version changée: ${lastCheckedVersionRef.current} -> ${storedVersion}`);
+        lastCheckedVersionRef.current = storedVersion;
+        
+        // Mettre à jour le nom de la version
+        const savedProjectVersions = localStorage.getItem(STORAGE_KEYS.PROJECT_VERSIONS);
+        if (savedProjectVersions) {
+          try {
+            const versions = JSON.parse(savedProjectVersions);
+            const version = versions.find((v: any) => v.id === storedVersion);
+            if (version) {
+              setVersionName(version.name);
+            }
+          } catch (error) {
+            console.error("Erreur lors du parsing des versions:", error);
+          }
+        }
+        
+        forceRefresh();
+      }
+    };
+    
+    // Vérifier toutes les 2 secondes
+    const intervalId = setInterval(checkVersionChange, 2000);
+    
+    // Nettoyer l'intervalle au démontage
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Fonction pour forcer le rafraîchissement des données depuis le localStorage
   const forceRefresh = useCallback(() => {
     console.log("🔄 Forçage du rafraîchissement des données...");
-    // Rechargement des données depuis localStorage
-    const savedTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
-    const savedTreeData = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
+    
+    // Récupérer la version courante directement depuis localStorage
+    const storedVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+    if (!storedVersion) {
+      console.log("⚠️ Aucune version trouvée dans localStorage, impossible de rafraîchir");
+      return;
+    }
+    
+    // Mettre à jour le nom de la version
+    const savedProjectVersions = localStorage.getItem(STORAGE_KEYS.PROJECT_VERSIONS);
+    if (savedProjectVersions) {
+      try {
+        const versions = JSON.parse(savedProjectVersions);
+        const version = versions.find((v: any) => v.id === storedVersion);
+        if (version) {
+          setVersionName(version.name);
+        } else {
+          setVersionName('Version inconnue');
+        }
+      } catch (error) {
+        console.error("Erreur lors du parsing des versions:", error);
+      }
+    } else {
+      setVersionName('Version par défaut');
+    }
+    
+    // Obtenir les clés spécifiques à la version courante
+    const versionKeys = getVersionStorageKeys(storedVersion);
+    
+    // Rechargement des données depuis localStorage pour cette version
+    const savedTableData = localStorage.getItem(versionKeys.TABLE_DATA);
+    const savedTreeData = localStorage.getItem(versionKeys.TREE_DATA);
     
     let refreshedTableDataMap = tableDataMap;
     let refreshedTreeData = treeData;
@@ -102,10 +191,12 @@ export default function SummarySpreadsheet() {
       const chaptersData = convertLocalStorageDataToChapters(refreshedTreeData, refreshedTableDataMap);
       processProjectData(chaptersData);
       setLastRefreshTime(Date.now());
+    } else {
+      console.log("⚠️ Aucune donnée trouvée pour cette version");
     }
   }, [tableDataMap, treeData]);
 
-  // Forcer un rafraîchissement au montage du composant
+  // Forcer un rafraîchissement au montage du composant et quand la version change
   useEffect(() => {
     // Attendre un court délai pour s'assurer que localStorage est bien initialisé
     const timer = setTimeout(() => {
@@ -113,7 +204,7 @@ export default function SummarySpreadsheet() {
     }, 100);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [currentVersion, forceRefresh]);
 
   // Effet standard pour mettre à jour lorsque les données changent
   useEffect(() => {
@@ -494,7 +585,12 @@ export default function SummarySpreadsheet() {
     <div className="summary-spreadsheet">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Spreadsheet Summary</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {versionName && (
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+              Phase active: {versionName}
+            </span>
+          )}
           <button 
             onClick={handleExportExcel}
             className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center gap-1"
@@ -519,7 +615,10 @@ export default function SummarySpreadsheet() {
           <li>Le prix est calculé automatiquement</li>
           <li>L'ajout et la suppression de lignes ne sont pas disponibles</li>
         </ul>
-        <p className="mt-1 text-xs text-gray-600">Dernière mise à jour: {new Date(lastRefreshTime).toLocaleTimeString()}</p>
+        <p className="mt-1 text-xs text-gray-600">
+          Dernière mise à jour: {new Date(lastRefreshTime).toLocaleTimeString()} 
+          {versionName && <span> | Phase: {versionName}</span>}
+        </p>
       </div>
       
       {consolidatedData.length > 0 ? (

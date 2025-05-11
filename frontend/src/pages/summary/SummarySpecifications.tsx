@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './SummarySpecifications.css';
-import { useLocalStorageData, TreeNodeData, STORAGE_KEYS } from '../../hooks/useLocalStorageData';
+import { useLocalStorageData, TreeNodeData, STORAGE_KEYS, getVersionStorageKeys } from '../../hooks/useLocalStorageData';
 import { useEditor, EditorContent, Extension } from '@tiptap/react';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
@@ -329,62 +329,65 @@ export default function SummarySpecifications() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [combinedContent, setCombinedContent] = useState<string>('');
   const [lastUpdateCheck, setLastUpdateCheck] = useState<number>(Date.now());
-  const { treeData, chapterTextMap, loading, updateNode, updateChapterText, updateChapterTextMap } = useLocalStorageData();
+  const { treeData, chapterTextMap, loading, updateNode, updateChapterText, updateChapterTextMap, currentVersion, projectVersions } = useLocalStorageData();
   const { setEditor } = useEditorStore();
   const editorUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
   const contentUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
   const forceUpdateRef = useRef<boolean>(false);
+  const [versionName, setVersionName] = useState<string>('');
+  const lastCheckedVersionRef = useRef<string | null>(currentVersion);
   
-  // Fonction pour forcer le rechargement depuis localStorage
-  const forceReloadFromLocalStorage = useCallback(() => {
-    try {
-      console.log("Forçage du rechargement des données depuis localStorage");
-      
-      const treeDataFromStorage = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
-      const chapterTextFromStorage = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
-      
-      if (treeDataFromStorage && chapterTextFromStorage) {
-        const parsedTreeData = JSON.parse(treeDataFromStorage);
-        const parsedChapterText = JSON.parse(chapterTextFromStorage);
-        
-        // Marquer que nous forçons une mise à jour
-        forceUpdateRef.current = true;
-        
-        // Traiter les données chargées
-        const flatNodes = flattenTreeNodes(parsedTreeData);
-        const extractedChapters: Chapter[] = flatNodes.map(node => ({
-          id: node.key,
-          num: node.num,
-          label: node.label,
-          parentId: node.parentId || null,
-          content: parsedChapterText[node.key] || ''
-        }));
-        
-        // Trier les chapitres
-        const sortedChapters = sortChapters(extractedChapters);
-        setChapters(sortedChapters);
-        
-        // Générer le contenu combiné pour l'éditeur
-        const combined = generateCombinedContent(sortedChapters);
-        setCombinedContent(combined);
-        
-        console.log("Rechargement forcé terminé");
-      }
-    } catch (error) {
-      console.error("Erreur lors du rechargement forcé:", error);
-    } finally {
-      forceUpdateRef.current = false;
-    }
-  }, []);
-  
-  console.log("🚀 SummarySpecifications: Payload reçu depuis localStorage:", {
-    treeData,
-    chapterTextMap
-  });
-  
-  // Configuration de l'éditeur TipTap
+  // Initialiser l'éditeur
   const editor = useEditor({
-    immediatelyRender: true,
+    extensions: [
+      StarterKit,
+      Image.configure({
+        HTMLAttributes: {
+          class: 'max-w-full h-auto',
+        },
+      }),
+      ImageResize,
+      Underline,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'flex checkbox-item gap-2',
+        },
+      }),
+      TextStyle,
+      FontFamily,
+      Color,
+      Highlight.configure({
+        multicolor: true,
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          rel: 'noopener noreferrer',
+          class: 'text-blue-600 underline',
+        },
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      FontSizeExtension,
+      LineHeightExtension,
+      ProtectHeadings,
+    ],
+    content: combinedContent,
+    editorProps: {
+      attributes: {
+        class: "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 px-14 pb-10 cursor-text",
+      }
+    },
+    
     onCreate({ editor }) {
       setEditor(editor);
     },
@@ -416,46 +419,158 @@ export default function SummarySpecifications() {
       extractChapterTitles(editor.getHTML());
       // Sauvegarder le contenu lorsque l'éditeur perd le focus
       extractAndSaveContent(editor.getHTML());
-    },
-    editorProps: {
-      attributes: {
-        class: "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 px-14 pb-10 cursor-text",
+    }
+  });
+  
+  // Trouver le nom de la version actuelle
+  useEffect(() => {
+    if (currentVersion && projectVersions.length > 0) {
+      const version = projectVersions.find(v => v.id === currentVersion);
+      if (version) {
+        setVersionName(version.name);
+      } else {
+        setVersionName('Version inconnue');
       }
-    },
-    extensions: [
-      StarterKit,
-      LineHeightExtension,
-      FontSizeExtension,
-      TextAlign.configure({
-        types: ["heading", "paragraph"]
-      }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        defaultProtocol: "https"
-      }),
-      Color,
-      Highlight.configure({
-        multicolor: true,
-      }),
-      FontFamily,
-      TextStyle,
-      Underline,
-      Image,
-      ImageResize,
-      Table,
-      TableCell,
-      TableHeader,
-      TableRow,
-      TaskItem.configure({
-        nested: true
-      }),
-      TaskList,
-      ProtectHeadings, // Extension pour protéger les numéros de chapitres
-    ],
-    content: combinedContent,
-  }, [combinedContent]); // Dépendance pour recréer l'éditeur quand le contenu change
+    } else {
+      setVersionName('Version par défaut');
+    }
+  }, [currentVersion, projectVersions]);
+  
+  // Ajouter un intervalle pour vérifier périodiquement si la version a changé
+  useEffect(() => {
+    // Vérifier si la version courante a changé dans localStorage
+    const checkVersionChange = () => {
+      const storedVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+      
+      if (storedVersion && storedVersion !== lastCheckedVersionRef.current) {
+        console.log(`🔄 Version changée: ${lastCheckedVersionRef.current} -> ${storedVersion}`);
+        lastCheckedVersionRef.current = storedVersion;
+        
+        // Mettre à jour le nom de la version
+        const savedProjectVersions = localStorage.getItem(STORAGE_KEYS.PROJECT_VERSIONS);
+        if (savedProjectVersions) {
+          try {
+            const versions = JSON.parse(savedProjectVersions);
+            const version = versions.find((v: any) => v.id === storedVersion);
+            if (version) {
+              setVersionName(version.name);
+            }
+          } catch (error) {
+            console.error("Erreur lors du parsing des versions:", error);
+          }
+        }
+        
+        // Forcer un rafraîchissement du contenu
+        processLocalStorageDataWithVersion(storedVersion);
+      }
+    };
+    
+    // Vérifier toutes les 2 secondes
+    const intervalId = setInterval(checkVersionChange, 2000);
+    
+    // Nettoyer l'intervalle au démontage
+    return () => clearInterval(intervalId);
+  }, []);
+  
+  // Nouvelle fonction pour traiter les données avec une version spécifique
+  const processLocalStorageDataWithVersion = useCallback((versionId: string) => {
+    console.log(`🔄 Traitement des données pour la version: ${versionId}`);
+    
+    // Obtenir les clés spécifiques à la version
+    const versionKeys = getVersionStorageKeys(versionId);
+    
+    // Charger les données depuis localStorage
+    const savedTreeData = localStorage.getItem(versionKeys.TREE_DATA);
+    const savedChapterText = localStorage.getItem(versionKeys.CHAPTER_TEXT);
+    
+    if (!savedTreeData || !savedChapterText) {
+      console.log("⚠️ Données manquantes pour cette version");
+      return;
+    }
+    
+    try {
+      const parsedTreeData = JSON.parse(savedTreeData);
+      const parsedChapterText = JSON.parse(savedChapterText);
+      
+      // Traiter les données chargées
+      const flatNodes = flattenTreeNodes(parsedTreeData);
+      const extractedChapters: Chapter[] = flatNodes.map(node => ({
+        id: node.key,
+        num: node.num,
+        label: node.label,
+        parentId: node.parentId || null,
+        content: parsedChapterText[node.key] || ''
+      }));
+      
+      // Trier les chapitres
+      const sortedChapters = sortChapters(extractedChapters);
+      setChapters(sortedChapters);
+      
+      // Générer le contenu combiné
+      const newContent = generateCombinedContent(sortedChapters);
+      setCombinedContent(newContent);
+      
+      // Mettre à jour l'éditeur si disponible
+      if (editor) {
+        editor.commands.setContent(newContent);
+      }
+      
+      // Mettre à jour la date de dernière vérification
+      setLastUpdateCheck(Date.now());
+      
+      console.log("🔄 Mise à jour du contenu terminée");
+    } catch (error) {
+      console.error("Erreur lors du traitement des données:", error);
+    }
+  }, [editor]);
 
+  // Fonction pour forcer le rechargement depuis localStorage
+  const forceReloadFromLocalStorage = useCallback(() => {
+    try {
+      // Activer le flag pour éviter les sauvegardes pendant le rechargement forcé
+      forceUpdateRef.current = true;
+      
+      // Récupérer la version courante directement depuis localStorage
+      const storedVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+      if (!storedVersion) {
+        console.log("⚠️ Aucune version trouvée dans localStorage");
+        forceUpdateRef.current = false;
+        return;
+      }
+      
+      // Mettre à jour le nom de la version
+      const savedProjectVersions = localStorage.getItem(STORAGE_KEYS.PROJECT_VERSIONS);
+      if (savedProjectVersions) {
+        try {
+          const versions = JSON.parse(savedProjectVersions);
+          const version = versions.find((v: any) => v.id === storedVersion);
+          if (version) {
+            setVersionName(version.name);
+          } else {
+            setVersionName('Version inconnue');
+          }
+        } catch (error) {
+          console.error("Erreur lors du parsing des versions:", error);
+        }
+      }
+      
+      processLocalStorageDataWithVersion(storedVersion);
+      
+      // Nettoyer le flag après un court délai
+      setTimeout(() => {
+        forceUpdateRef.current = false;
+      }, 500);
+    } catch (error) {
+      console.error("Erreur lors du rechargement des données:", error);
+      forceUpdateRef.current = false;
+    }
+  }, [processLocalStorageDataWithVersion]);
+  
+  console.log("🚀 SummarySpecifications: Payload reçu depuis localStorage:", {
+    treeData,
+    chapterTextMap
+  });
+  
   // Effet pour charger les données une seule fois au montage du composant
   useEffect(() => {
     // Charger les données immédiatement au montage du composant
@@ -711,9 +826,25 @@ export default function SummarySpecifications() {
   return (
     <div className="specifications-summary bg-[#FAFBFD] print:bg-white">
       <div className="print:hidden flex flex-col">
-        <div className="flex mb-2">
-          {editor && <Toolbar disablePrint={false} directEditor={editor} />}
-          <ExportButtons />
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            {editor && <Toolbar disablePrint={false} directEditor={editor} />}
+          </div>
+          <div className="flex gap-2 items-center">
+            {versionName && (
+              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                Phase active: {versionName}
+              </span>
+            )}
+            <button 
+              onClick={forceReloadFromLocalStorage}
+              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-1"
+              title="Rafraîchir le contenu"
+            >
+              <span>↻</span> Rafraîchir
+            </button>
+            <ExportButtons />
+          </div>
         </div>
         <div className="bg-yellow-100 p-2 rounded text-sm mb-2 border border-yellow-300">
           <strong>Note:</strong> Les titres des chapitres ne peuvent pas être modifiés depuis le récap. Pour modifier un titre, veuillez utiliser la section Métré.

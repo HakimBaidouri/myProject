@@ -7,8 +7,23 @@ export const STORAGE_KEYS = {
   CHAPTER_TEXT: 'metreChapterText',
   TREE_DATA: 'metreTreeData',
   SELECTED_KEY: 'metreSelectedKey',
-  ACTIVE_TAB: 'metreActiveTab'
+  ACTIVE_TAB: 'metreActiveTab',
+  PROJECT_VERSIONS: 'metreProjectVersions',
+  CURRENT_VERSION: 'metreCurrentVersion'
 };
+
+// Version par défaut
+export const DEFAULT_VERSION_ID = 'version-default';
+
+// Fonction pour obtenir les clés de stockage spécifiques à une version
+export const getVersionStorageKeys = (versionId: string) => ({
+  TABLE_DATA: `${STORAGE_KEYS.TABLE_DATA}_${versionId}`,
+  DETAIL_DATA: `${STORAGE_KEYS.DETAIL_DATA}_${versionId}`,
+  CHAPTER_TEXT: `${STORAGE_KEYS.CHAPTER_TEXT}_${versionId}`,
+  TREE_DATA: `${STORAGE_KEYS.TREE_DATA}_${versionId}`,
+  SELECTED_KEY: `${STORAGE_KEYS.SELECTED_KEY}_${versionId}`,
+  ACTIVE_TAB: `${STORAGE_KEYS.ACTIVE_TAB}_${versionId}`
+});
 
 export interface TreeNodeData {
   key: string;
@@ -18,8 +33,20 @@ export interface TreeNodeData {
   parentId?: string | null;
 }
 
+export interface ProjectVersion {
+  id: string;
+  name: string;
+  createdAt: string;
+  treeData: TreeNodeData[];
+  tableDataMap: Record<string, any[][]>;
+  detailDataMap: Record<string, any[][]>;
+  chapterTextMap: Record<string, string>;
+}
+
 // Référence globale pour la persistance des données entre les rendus
 const globalDataRef = {
+  currentVersion: null as string | null,
+  projectVersions: [] as ProjectVersion[],
   treeData: [] as TreeNodeData[],
   tableDataMap: {} as Record<string, any[][]>,
   detailDataMap: {} as Record<string, any[][]>,
@@ -39,11 +66,28 @@ export function useLocalStorageData() {
   // Vérifier si c'est la première initialisation ou une réutilisation
   const isInitializedRef = useRef(globalDataRef.initialized);
   
+  const [currentVersion, setCurrentVersion] = useState<string | null>(globalDataRef.currentVersion);
+  const [projectVersions, setProjectVersions] = useState<ProjectVersion[]>(globalDataRef.projectVersions);
   const [treeData, setTreeData] = useState<TreeNodeData[]>(globalDataRef.treeData);
   const [tableDataMap, setTableDataMap] = useState<Record<string, any[][]>>(globalDataRef.tableDataMap);
   const [detailDataMap, setDetailDataMap] = useState<Record<string, any[][]>>(globalDataRef.detailDataMap);
   const [chapterTextMap, setChapterTextMap] = useState<Record<string, string>>(globalDataRef.chapterTextMap);
   const [loading, setLoading] = useState(!isInitializedRef.current);
+
+  // Fonction pour obtenir les clés de stockage actuelles basées sur la version
+  const getCurrentStorageKeys = useCallback(() => {
+    if (currentVersion) {
+      return getVersionStorageKeys(currentVersion);
+    } else {
+      // Charger la version courante
+      const savedCurrentVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+      if (savedCurrentVersion) {
+        return getVersionStorageKeys(savedCurrentVersion);
+      }
+    }
+    // Fallback aux clés par défaut si aucune version n'est définie
+    return STORAGE_KEYS;
+  }, [currentVersion]);
 
   // Fonction pour sauvegarder les données dans localStorage
   const saveToLocalStorage = useCallback((key: string, data: any) => {
@@ -184,12 +228,45 @@ export function useLocalStorageData() {
       console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Tentative de chargement depuis localStorage`);
       
       try {
-        const savedTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
-        const savedDetailData = localStorage.getItem(STORAGE_KEYS.DETAIL_DATA);
-        const savedChapterText = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
-        const savedTreeData = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
+        // Charger d'abord les informations de version
+        const savedProjectVersions = localStorage.getItem(STORAGE_KEYS.PROJECT_VERSIONS);
+        const savedCurrentVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+        
+        // Déterminer quelle version utiliser
+        let versionId = DEFAULT_VERSION_ID;
+        let versions: ProjectVersion[] = [];
+        
+        if (savedProjectVersions) {
+          try {
+            versions = JSON.parse(savedProjectVersions);
+            if (savedCurrentVersion && versions.some(v => v.id === savedCurrentVersion)) {
+              versionId = savedCurrentVersion;
+            } else if (versions.length > 0) {
+              versionId = versions[versions.length - 1].id;
+            }
+          } catch (error) {
+            console.error("Erreur lors du parsing des versions:", error);
+          }
+        }
+        
+        // Mettre à jour les versions dans l'état global
+        globalDataRef.projectVersions = versions;
+        globalDataRef.currentVersion = versionId;
+        setProjectVersions(versions);
+        setCurrentVersion(versionId);
+        
+        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Version actuelle: ${versionId}`);
+        
+        // Obtenir les clés de stockage pour cette version
+        const storageKeys = getVersionStorageKeys(versionId);
+        
+        // Charger les données avec les clés de la version
+        const savedTableData = localStorage.getItem(storageKeys.TABLE_DATA);
+        const savedDetailData = localStorage.getItem(storageKeys.DETAIL_DATA);
+        const savedChapterText = localStorage.getItem(storageKeys.CHAPTER_TEXT);
+        const savedTreeData = localStorage.getItem(storageKeys.TREE_DATA);
 
-        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Données trouvées dans localStorage:`, {
+        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Données trouvées dans localStorage pour version ${versionId}:`, {
           hasTableData: !!savedTableData,
           hasDetailData: !!savedDetailData,
           hasChapterText: !!savedChapterText,
@@ -198,83 +275,127 @@ export function useLocalStorageData() {
 
         if (savedTableData) {
           const parsedData = JSON.parse(savedTableData);
-          setTableDataMap(parsedData);
           globalDataRef.tableDataMap = parsedData;
+          setTableDataMap(parsedData);
         }
 
         if (savedDetailData) {
           const parsedData = JSON.parse(savedDetailData);
-          setDetailDataMap(parsedData);
           globalDataRef.detailDataMap = parsedData;
+          setDetailDataMap(parsedData);
         }
 
         if (savedChapterText) {
           const parsedData = JSON.parse(savedChapterText);
-          setChapterTextMap(parsedData);
           globalDataRef.chapterTextMap = parsedData;
+          setChapterTextMap(parsedData);
         }
 
         if (savedTreeData) {
           const parsedData = JSON.parse(savedTreeData);
-          setTreeData(parsedData);
           globalDataRef.treeData = parsedData;
+          setTreeData(parsedData);
         }
-        
-        // Marquer comme initialisé globalement
+
         globalDataRef.initialized = true;
         isInitializedRef.current = true;
+        setLoading(false);
+
+        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Chargement des données terminé`);
       } catch (error) {
-        console.error(`⚠️ useLocalStorageData [#${instanceIdRef.current}]: Erreur lors du chargement des données depuis localStorage:`, error);
-      } finally {
-        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Chargement terminé, passage à loading=false`);
+        console.error(`⚠️ Erreur lors du chargement des données:`, error);
         setLoading(false);
       }
     };
-
+    
     loadDataFromLocalStorage();
-    
-    // Ajouter un écouteur d'événements pour détecter les changements de localStorage
+  }, [instanceIdRef]);
+
+  // Effet pour écouter les changements de stockage local (window.addEventListener)
+  useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key && Object.values(STORAGE_KEYS).includes(event.key)) {
-        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Changement détecté dans localStorage pour ${event.key}`);
-        loadDataFromLocalStorage();
-      }
+      // Si la clé de version courante a changé, il faut tout rafraîchir
+      if (event.key === STORAGE_KEYS.CURRENT_VERSION) {
+        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Version courante changée, rechargement des données`);
+        
+        const newVersionId = event.newValue;
+        if (newVersionId && newVersionId !== currentVersion) {
+          // Mise à jour de l'état global
+          globalDataRef.currentVersion = newVersionId;
+          setCurrentVersion(newVersionId);
+          
+          // Charger les données de cette version
+          const versionKeys = getVersionStorageKeys(newVersionId);
+          
+          try {
+            // Charger les données avec les clés de la nouvelle version
+            const savedTableData = localStorage.getItem(versionKeys.TABLE_DATA);
+            const savedDetailData = localStorage.getItem(versionKeys.DETAIL_DATA);
+            const savedChapterText = localStorage.getItem(versionKeys.CHAPTER_TEXT);
+            const savedTreeData = localStorage.getItem(versionKeys.TREE_DATA);
+            
+            if (savedTableData) {
+              const parsedData = JSON.parse(savedTableData);
+              globalDataRef.tableDataMap = parsedData;
+              setTableDataMap(parsedData);
+            }
+            
+            if (savedDetailData) {
+              const parsedData = JSON.parse(savedDetailData);
+              globalDataRef.detailDataMap = parsedData;
+              setDetailDataMap(parsedData);
+            }
+            
+            if (savedChapterText) {
+              const parsedData = JSON.parse(savedChapterText);
+              globalDataRef.chapterTextMap = parsedData;
+              setChapterTextMap(parsedData);
+            }
+            
+            if (savedTreeData) {
+              const parsedData = JSON.parse(savedTreeData);
+              globalDataRef.treeData = parsedData;
+              setTreeData(parsedData);
+            }
+          } catch (error) {
+            console.error(`⚠️ Erreur lors du chargement des données de la nouvelle version:`, error);
+          }
+        }
+      } else if (event.key === STORAGE_KEYS.PROJECT_VERSIONS) {
+        console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: Liste des versions mise à jour`);
+        
+        try {
+          if (event.newValue) {
+            const parsedVersions = JSON.parse(event.newValue);
+            globalDataRef.projectVersions = parsedVersions;
+            setProjectVersions(parsedVersions);
+          }
+        } catch (error) {
+          console.error(`⚠️ Erreur lors de la mise à jour des versions:`, error);
+        }
+      } 
+      // ... les autres cas pour les autres clés ...
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
-    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [instanceIdRef]); // Dépendance vide pour n'exécuter qu'au montage
-
-  // Vérifie si les données ont bien été initialisées - n'exécuter que si loading change
-  useEffect(() => {
-    if (!loading) {
-      console.log(`⚡ useLocalStorageData [#${instanceIdRef.current}]: État des données après chargement -`, {
-        loading,
-        treeDataLength: treeData.length,
-        tableDataSize: Object.keys(tableDataMap).length,
-        detailDataSize: Object.keys(detailDataMap).length,
-        chapterTextSize: Object.keys(chapterTextMap).length
-      });
-    }
-  }, [loading, instanceIdRef]);
+  }, [instanceIdRef, currentVersion]);
 
   return {
-    // Données
     treeData,
     tableDataMap,
     detailDataMap,
     chapterTextMap,
     loading,
-    
-    // Méthodes de mise à jour
+    projectVersions,
+    currentVersion,
+    updateNode,
     updateTreeData,
     updateTableDataMap,
     updateDetailDataMap,
-    updateChapterTextMap,
     updateChapterText,
-    updateNode
+    updateChapterTextMap
   };
 } 
