@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Tree from 'rc-tree';
 import Handsontable from 'handsontable';
 import { NumericCellType } from 'handsontable/cellTypes';
@@ -9,6 +9,9 @@ import './Metre.css';
 import MetreTable from './MetreTable';
 import { useProjectLoader } from '../../hooks/useProjectLoader';
 import ChapterEditor from '../textEditor/ChapterEditor';
+import { HotTable } from '@handsontable/react';
+import { HotTableProps } from '@handsontable/react';
+import { registerAllModules } from 'handsontable/registry';
 
 Handsontable.cellTypes.registerCellType(NumericCellType);
 
@@ -19,8 +22,34 @@ const STORAGE_KEYS = {
   CHAPTER_TEXT: 'metreChapterText',
   TREE_DATA: 'metreTreeData',
   SELECTED_KEY: 'metreSelectedKey',
-  ACTIVE_TAB: 'metreActiveTab'
+  ACTIVE_TAB: 'metreActiveTab',
+  PROJECT_VERSIONS: 'metreProjectVersions',
+  CURRENT_VERSION: 'metreCurrentVersion'
 };
+
+// Version par défaut
+const DEFAULT_VERSION_ID = 'version-default';
+
+// Fonction pour obtenir les clés de stockage spécifiques à une version
+const getVersionStorageKeys = (versionId: string) => ({
+  TABLE_DATA: `${STORAGE_KEYS.TABLE_DATA}_${versionId}`,
+  DETAIL_DATA: `${STORAGE_KEYS.DETAIL_DATA}_${versionId}`,
+  CHAPTER_TEXT: `${STORAGE_KEYS.CHAPTER_TEXT}_${versionId}`,
+  TREE_DATA: `${STORAGE_KEYS.TREE_DATA}_${versionId}`,
+  SELECTED_KEY: `${STORAGE_KEYS.SELECTED_KEY}_${versionId}`,
+  ACTIVE_TAB: `${STORAGE_KEYS.ACTIVE_TAB}_${versionId}`
+});
+
+// Type pour les versions du projet
+interface ProjectVersion {
+  id: string;
+  name: string;
+  createdAt: string;
+  treeData: TreeNodeData[];
+  tableDataMap: Record<string, any[][]>;
+  detailDataMap: Record<string, any[][]>;
+  chapterTextMap: Record<string, string>;
+}
 
 interface TreeNodeData {
   key: string;
@@ -29,7 +58,6 @@ interface TreeNodeData {
   children?: TreeNodeData[];
   parentId?: string | null;
 }
-
 
 export default function MetreArbo() {
   
@@ -42,99 +70,274 @@ export default function MetreArbo() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [clickCountMap, setClickCountMap] = useState<Record<string, number>>({});
+  
+  // Nouveaux états pour la gestion des versions
+  const [projectVersions, setProjectVersions] = useState<ProjectVersion[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<string>(DEFAULT_VERSION_ID);
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
+  const [newVersionName, setNewVersionName] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Mise à jour du localStorage lorsque les données changent
+  // Initialisation & chargement des versions depuis localStorage
   useEffect(() => {
-    if (Object.keys(tableDataMap).length > 0) {
-      localStorage.setItem(STORAGE_KEYS.TABLE_DATA, JSON.stringify(tableDataMap));
-      console.log('Données des tableaux sauvegardées dans localStorage');
-    }
-  }, [tableDataMap]);
-
-  useEffect(() => {
-    if (Object.keys(detailDataMap).length > 0) {
-      localStorage.setItem(STORAGE_KEYS.DETAIL_DATA, JSON.stringify(detailDataMap));
-      console.log('Données de détails sauvegardées dans localStorage');
-    }
-  }, [detailDataMap]);
-
-  useEffect(() => {
-    if (Object.keys(chapterTextMap).length > 0) {
-      localStorage.setItem(STORAGE_KEYS.CHAPTER_TEXT, JSON.stringify(chapterTextMap));
-      console.log('Textes des chapitres sauvegardés dans localStorage');
-    }
-  }, [chapterTextMap]);
-
-  // Sauvegarder l'arborescence modifiée dans localStorage
-  useEffect(() => {
-    if (treeData.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.TREE_DATA, JSON.stringify(treeData));
-      console.log('Arborescence sauvegardée dans localStorage');
-    }
-  }, [treeData]);
-
-  // Sauvegarder la sélection courante dans localStorage
-  useEffect(() => {
-    if (selectedKey) {
-      localStorage.setItem(STORAGE_KEYS.SELECTED_KEY, selectedKey);
-      console.log('Sélection sauvegardée dans localStorage:', selectedKey);
-    }
-  }, [selectedKey]);
-
-  // Sauvegarder l'onglet actif dans localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, activeTab);
-    console.log('Onglet actif sauvegardé dans localStorage:', activeTab);
-  }, [activeTab]);
-
-  // Chargement des données depuis localStorage si elles existent
-  useEffect(() => {
-    const loadDataFromLocalStorage = () => {
+    console.log("INITIALISATION - Chargement des versions");
+    
+    // Vérifier d'abord si des versions existent déjà
+    const savedVersionsStr = localStorage.getItem(STORAGE_KEYS.PROJECT_VERSIONS);
+    const savedCurrentVersion = localStorage.getItem(STORAGE_KEYS.CURRENT_VERSION);
+    
+    let versions: ProjectVersion[] = [];
+    let versionId: string = DEFAULT_VERSION_ID;
+    
+    // Si des versions existent, les charger
+    if (savedVersionsStr) {
       try {
-        const savedTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
-        const savedDetailData = localStorage.getItem(STORAGE_KEYS.DETAIL_DATA);
-        const savedChapterText = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
-        const savedTreeData = localStorage.getItem(STORAGE_KEYS.TREE_DATA);
-        const savedSelectedKey = localStorage.getItem(STORAGE_KEYS.SELECTED_KEY);
-        const savedActiveTab = localStorage.getItem(STORAGE_KEYS.ACTIVE_TAB);
-
-        if (savedTableData) {
-          setTableDataMap(JSON.parse(savedTableData));
-          console.log('Données des tableaux chargées depuis localStorage');
-        }
-
-        if (savedDetailData) {
-          setDetailDataMap(JSON.parse(savedDetailData));
-          console.log('Données de détails chargées depuis localStorage');
-        }
-
-        if (savedChapterText) {
-          setChapterTextMap(JSON.parse(savedChapterText));
-          console.log('Textes des chapitres chargés depuis localStorage');
-        }
-
-        if (savedTreeData) {
-          setTreeData(JSON.parse(savedTreeData));
-          console.log('Arborescence chargée depuis localStorage');
-        }
-
-        if (savedSelectedKey) {
-          setSelectedKey(savedSelectedKey);
-          console.log('Sélection chargée depuis localStorage:', savedSelectedKey);
-        }
-
-        if (savedActiveTab && (savedActiveTab === 'table' || savedActiveTab === 'doc')) {
-          setActiveTab(savedActiveTab as 'table' | 'doc');
-          console.log('Onglet actif chargé depuis localStorage:', savedActiveTab);
+        const parsedVersions: ProjectVersion[] = JSON.parse(savedVersionsStr);
+        if (Array.isArray(parsedVersions) && parsedVersions.length > 0) {
+          versions = parsedVersions;
+          console.log(`${versions.length} versions trouvées dans localStorage`);
+          
+          // Si une version courante est définie et existe dans nos versions, l'utiliser
+          if (savedCurrentVersion) {
+            const versionExists = versions.some(v => v.id === savedCurrentVersion);
+            if (versionExists) {
+              versionId = savedCurrentVersion;
+              console.log(`Version courante sélectionnée: ${versionId}`);
+            }
+          } else {
+            // Sinon, utiliser la dernière version
+            versionId = versions[versions.length - 1].id;
+            console.log(`Aucune version courante définie, utilisation de la dernière: ${versionId}`);
+          }
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des données depuis localStorage:', error);
+        console.error("Erreur lors du chargement des versions:", error);
       }
-    };
-
-    // Charger les données depuis localStorage
-    loadDataFromLocalStorage();
+    }
+    
+    // Si aucune version n'existe, créer la version par défaut
+    if (versions.length === 0) {
+      console.log("Aucune version trouvée, création de la version par défaut");
+      const defaultVersion: ProjectVersion = {
+        id: DEFAULT_VERSION_ID,
+        name: "Version initiale",
+        createdAt: new Date().toISOString(),
+        treeData: [],
+        tableDataMap: {},
+        detailDataMap: {},
+        chapterTextMap: {}
+      };
+      
+      versions = [defaultVersion];
+      versionId = DEFAULT_VERSION_ID;
+      
+      // Sauvegarder la version par défaut
+      localStorage.setItem(STORAGE_KEYS.PROJECT_VERSIONS, JSON.stringify(versions));
+      localStorage.setItem(STORAGE_KEYS.CURRENT_VERSION, versionId);
+    }
+    
+    // Mettre à jour les états avec les versions et la version courante
+    setProjectVersions(versions);
+    setCurrentVersion(versionId);
+    
+    // Marquer l'initialisation comme terminée
+    setIsInitialized(true);
   }, []);
+
+  // Chargement des données de la version actuelle
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    console.log(`Chargement des données pour la version: ${currentVersion}`);
+    
+    // Obtenez les clés pour la version actuelle
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    
+    // Charger d'abord les données depuis localStorage
+    try {
+      // Arborescence
+      const savedTreeData = localStorage.getItem(versionKeys.TREE_DATA);
+      if (savedTreeData) {
+        const parsedTreeData = JSON.parse(savedTreeData);
+        setTreeData(parsedTreeData);
+        console.log("Arborescence chargée depuis localStorage");
+      } else {
+        // Si pas d'arborescence dans localStorage, chercher dans la version
+        const currentVersionObj = projectVersions.find(v => v.id === currentVersion);
+        if (currentVersionObj && currentVersionObj.treeData.length > 0) {
+          setTreeData(currentVersionObj.treeData);
+          console.log("Arborescence chargée depuis l'objet version");
+        }
+      }
+      
+      // Tableaux
+      const savedTableData = localStorage.getItem(versionKeys.TABLE_DATA);
+      if (savedTableData) {
+        const parsedTableData = JSON.parse(savedTableData);
+        setTableDataMap(parsedTableData);
+        console.log("Données des tableaux chargées depuis localStorage");
+      } else if (currentVersion === DEFAULT_VERSION_ID) {
+        // Si nous utilisons la version par défaut, essayer de charger depuis les anciennes clés
+        const legacyTableData = localStorage.getItem(STORAGE_KEYS.TABLE_DATA);
+        if (legacyTableData) {
+          setTableDataMap(JSON.parse(legacyTableData));
+          console.log("Données des tableaux chargées depuis les anciennes clés");
+        }
+      }
+      
+      // Détails
+      const savedDetailData = localStorage.getItem(versionKeys.DETAIL_DATA);
+      if (savedDetailData) {
+        const parsedDetailData = JSON.parse(savedDetailData);
+        setDetailDataMap(parsedDetailData);
+        console.log("Données de détails chargées depuis localStorage");
+      } else if (currentVersion === DEFAULT_VERSION_ID) {
+        // Si nous utilisons la version par défaut, essayer de charger depuis les anciennes clés
+        const legacyDetailData = localStorage.getItem(STORAGE_KEYS.DETAIL_DATA);
+        if (legacyDetailData) {
+          setDetailDataMap(JSON.parse(legacyDetailData));
+          console.log("Données de détails chargées depuis les anciennes clés");
+        }
+      }
+      
+      // Textes des chapitres
+      const savedChapterText = localStorage.getItem(versionKeys.CHAPTER_TEXT);
+      if (savedChapterText) {
+        const parsedChapterText = JSON.parse(savedChapterText);
+        setChapterTextMap(parsedChapterText);
+        console.log("Textes des chapitres chargés depuis localStorage");
+      } else if (currentVersion === DEFAULT_VERSION_ID) {
+        // Si nous utilisons la version par défaut, essayer de charger depuis les anciennes clés
+        const legacyChapterText = localStorage.getItem(STORAGE_KEYS.CHAPTER_TEXT);
+        if (legacyChapterText) {
+          setChapterTextMap(JSON.parse(legacyChapterText));
+          console.log("Textes des chapitres chargés depuis les anciennes clés");
+        }
+      }
+      
+      // Sélection
+      const savedSelectedKey = localStorage.getItem(versionKeys.SELECTED_KEY);
+      if (savedSelectedKey) {
+        setSelectedKey(savedSelectedKey);
+        console.log(`Sélection chargée: ${savedSelectedKey}`);
+      } else if (currentVersion === DEFAULT_VERSION_ID) {
+        // Si nous utilisons la version par défaut, essayer de charger depuis les anciennes clés
+        const legacySelectedKey = localStorage.getItem(STORAGE_KEYS.SELECTED_KEY);
+        if (legacySelectedKey) {
+          setSelectedKey(legacySelectedKey);
+          console.log(`Sélection chargée depuis les anciennes clés: ${legacySelectedKey}`);
+        }
+      }
+      
+      // Onglet actif
+      const savedActiveTab = localStorage.getItem(versionKeys.ACTIVE_TAB);
+      if (savedActiveTab && (savedActiveTab === 'table' || savedActiveTab === 'doc')) {
+        setActiveTab(savedActiveTab as 'table' | 'doc');
+        console.log(`Onglet actif chargé: ${savedActiveTab}`);
+      } else if (currentVersion === DEFAULT_VERSION_ID) {
+        // Si nous utilisons la version par défaut, essayer de charger depuis les anciennes clés
+        const legacyActiveTab = localStorage.getItem(STORAGE_KEYS.ACTIVE_TAB);
+        if (legacyActiveTab && (legacyActiveTab === 'table' || legacyActiveTab === 'doc')) {
+          setActiveTab(legacyActiveTab as 'table' | 'doc');
+          console.log(`Onglet actif chargé depuis les anciennes clés: ${legacyActiveTab}`);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des données:", error);
+    }
+  }, [isInitialized, currentVersion, projectVersions]);
+
+  // Mise à jour de la version courante dans localStorage quand elle change
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    console.log(`Mise à jour de la version courante: ${currentVersion}`);
+    localStorage.setItem(STORAGE_KEYS.CURRENT_VERSION, currentVersion);
+  }, [currentVersion, isInitialized]);
+
+  // Sauvegarde globale des données dans l'objet de version
+  useEffect(() => {
+    if (!isInitialized || projectVersions.length === 0) return;
+    
+    // Ne pas mettre à jour les versions à chaque changement de données
+    // Utiliser un délai pour regrouper les mises à jour
+    const timer = setTimeout(() => {
+      console.log(`Mise à jour des données complètes de la version: ${currentVersion}`);
+      
+      // Mettre à jour l'objet de version avec toutes les données actuelles
+      const updatedVersions = projectVersions.map(version => {
+        if (version.id === currentVersion) {
+          return {
+            ...version,
+            treeData: [...treeData],
+            tableDataMap: { ...tableDataMap },
+            detailDataMap: { ...detailDataMap },
+            chapterTextMap: { ...chapterTextMap }
+          };
+        }
+        return version;
+      });
+      
+      // Mettre à jour l'état des versions sans déclencher de nouvelles mises à jour
+      if (JSON.stringify(updatedVersions) !== JSON.stringify(projectVersions)) {
+        setProjectVersions(updatedVersions);
+        localStorage.setItem(STORAGE_KEYS.PROJECT_VERSIONS, JSON.stringify(updatedVersions));
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [treeData, tableDataMap, detailDataMap, chapterTextMap, currentVersion, isInitialized]);
+
+  // Sauvegarde des données individuelles de la version actuelle dans localStorage
+  useEffect(() => {
+    if (!isInitialized || treeData.length === 0) return;
+    
+    console.log(`Sauvegarde de l'arborescence pour la version: ${currentVersion}`);
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    localStorage.setItem(versionKeys.TREE_DATA, JSON.stringify(treeData));
+  }, [treeData, currentVersion, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized || Object.keys(tableDataMap).length === 0) return;
+    
+    console.log(`Sauvegarde des données des tableaux pour la version: ${currentVersion}`);
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    localStorage.setItem(versionKeys.TABLE_DATA, JSON.stringify(tableDataMap));
+  }, [tableDataMap, currentVersion, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized || Object.keys(detailDataMap).length === 0) return;
+    
+    console.log(`Sauvegarde des données de détails pour la version: ${currentVersion}`);
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    localStorage.setItem(versionKeys.DETAIL_DATA, JSON.stringify(detailDataMap));
+  }, [detailDataMap, currentVersion, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized || Object.keys(chapterTextMap).length === 0) return;
+    
+    console.log(`Sauvegarde des textes des chapitres pour la version: ${currentVersion}`);
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    localStorage.setItem(versionKeys.CHAPTER_TEXT, JSON.stringify(chapterTextMap));
+  }, [chapterTextMap, currentVersion, isInitialized]);
+
+  // Sauvegarde de la sélection
+  useEffect(() => {
+    if (!isInitialized || !selectedKey) return;
+    
+    console.log(`Sauvegarde de la sélection pour la version: ${currentVersion}`);
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    localStorage.setItem(versionKeys.SELECTED_KEY, selectedKey);
+  }, [selectedKey, currentVersion, isInitialized]);
+
+  // Sauvegarde de l'onglet actif
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    console.log(`Sauvegarde de l'onglet actif pour la version: ${currentVersion}`);
+    const versionKeys = getVersionStorageKeys(currentVersion);
+    localStorage.setItem(versionKeys.ACTIVE_TAB, activeTab);
+  }, [activeTab, currentVersion, isInitialized]);
 
   // Reconstruction de l'arborescence imbriquée depuis un tableau plat
   function buildTreeFromFlatData(flat: TreeNodeData[]): TreeNodeData[] {
@@ -584,9 +787,99 @@ export default function MetreArbo() {
     }
   };
 
+  // Fonction pour créer une nouvelle version
+  const createNewVersion = () => {
+    if (!newVersionName.trim()) {
+      alert('Veuillez entrer un nom pour la version');
+      return;
+    }
+
+    // Création de la nouvelle version
+    const newVersion: ProjectVersion = {
+      id: `version-${Date.now()}`,
+      name: newVersionName,
+      createdAt: new Date().toISOString(),
+      treeData: [...treeData],
+      tableDataMap: { ...tableDataMap },
+      detailDataMap: { ...detailDataMap },
+      chapterTextMap: { ...chapterTextMap }
+    };
+
+    console.log('Création d\'une nouvelle version:', newVersion.name);
+    
+    // Mise à jour de l'état
+    const updatedVersions = [...projectVersions, newVersion];
+    setProjectVersions(updatedVersions);
+    setCurrentVersion(newVersion.id);
+    setIsCreatingVersion(false);
+    setNewVersionName('');
+
+    // Sauvegarde dans localStorage
+    localStorage.setItem(STORAGE_KEYS.PROJECT_VERSIONS, JSON.stringify(updatedVersions));
+    localStorage.setItem(STORAGE_KEYS.CURRENT_VERSION, newVersion.id);
+  };
+
+  // Fonction pour changer de version
+  const switchVersion = (versionId: string) => {
+    if (!versionId) return;
+    
+    console.log(`Changement de version vers: ${versionId}`);
+    
+    // Mise à jour de la version courante
+    setCurrentVersion(versionId);
+    
+    // La mise à jour des données est gérée par les useEffect
+  };
+
   return (
     <div className="metre-layout">
       <aside className="metre-tree">
+        <div className="version-controls" style={{ margin: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <select 
+            value={currentVersion || ''} 
+            onChange={(e) => switchVersion(e.target.value)}
+            style={{ padding: '0.5rem', borderRadius: '4px' }}
+          >
+            <option value="">Sélectionner une version</option>
+            {projectVersions.map(version => (
+              <option key={version.id} value={version.id}>
+                {version.name} ({new Date(version.createdAt).toLocaleDateString()})
+              </option>
+            ))}
+          </select>
+
+          {isCreatingVersion ? (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={newVersionName}
+                onChange={(e) => setNewVersionName(e.target.value)}
+                placeholder="Nom de la version"
+                style={{ padding: '0.5rem', borderRadius: '4px', flex: 1 }}
+              />
+              <button 
+                onClick={createNewVersion}
+                style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#4CAF50', color: 'white' }}
+              >
+                Créer
+              </button>
+              <button 
+                onClick={() => setIsCreatingVersion(false)}
+                style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#f44336', color: 'white' }}
+              >
+                Annuler
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={() => setIsCreatingVersion(true)}
+              style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#2196F3', color: 'white' }}
+            >
+              ➕ Créer une nouvelle version
+            </button>
+          )}
+        </div>
+
         <button onClick={addMainChapter} style={{ margin: '0.5rem' }}>
           ➕ Ajouter un chapitre principal
         </button>
